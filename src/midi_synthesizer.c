@@ -1,0 +1,104 @@
+#include <stdio.h>
+#include "pico/stdlib.h"
+#include "hardware/i2c.h"
+#include "usb_midi.h"
+#include "midi_handler.h"
+#include "debug_uart.h"
+#include "display_handler.h"
+
+//--------------------------------------------------------------------+
+// Hardware Configuration
+//--------------------------------------------------------------------+
+
+// Debug Configuration
+#define DEBUG_ENABLED       true    // Set to false to disable all debug output
+
+// Debug UART Configuration
+#define DEBUG_UART          uart0
+#define DEBUG_UART_TX_PIN   0
+#define DEBUG_UART_RX_PIN   1
+#define DEBUG_UART_BAUD     115200
+
+// I2C MIDI Configuration
+#define I2C_MIDI_INSTANCE   i2c1
+#define I2C_MIDI_SDA_PIN    2
+#define I2C_MIDI_SCL_PIN    3
+#define I2C_MIDI_FREQ       100000
+
+// MIDI Semitone Handling
+#define SEMITONE_MODE       I2C_MIDI_SEMITONE_SKIP  // Options: I2C_MIDI_SEMITONE_PLAY, I2C_MIDI_SEMITONE_IGNORE, I2C_MIDI_SEMITONE_SKIP
+
+// OLED Display Configuration
+#define OLED_I2C_INSTANCE   I2C_MIDI_INSTANCE  // Share I2C bus with MIDI
+
+// LED Feedback Configuration
+#define LED_PIN             25
+
+//--------------------------------------------------------------------+
+// Main Entry Point
+//--------------------------------------------------------------------+
+int main()
+{
+    // Initialize debug UART
+    debug_uart_init(DEBUG_UART, DEBUG_UART_TX_PIN, DEBUG_UART_RX_PIN, DEBUG_UART_BAUD);
+    
+    // Set debug enable/disable based on global setting
+    debug_uart_set_enabled(DEBUG_ENABLED);
+    
+    debug_info("MIDI Synthesizer Starting...");
+    
+    // Initialize MIDI handler with I2C MIDI and LED feedback
+    if (!midi_handler_init(I2C_MIDI_INSTANCE, I2C_MIDI_SDA_PIN, I2C_MIDI_SCL_PIN, 
+                          I2C_MIDI_FREQ, LED_PIN, SEMITONE_MODE)) {
+        debug_error("Failed to initialize MIDI handler");
+        // Blink LED rapidly to indicate error
+        gpio_init(LED_PIN);
+        gpio_set_dir(LED_PIN, GPIO_OUT);
+        while (true) {
+            gpio_put(LED_PIN, 1);
+            sleep_ms(100);
+            gpio_put(LED_PIN, 0);
+            sleep_ms(100);
+        }
+    }
+    
+    // Initialize Display Handler
+    if (!display_handler_init(OLED_I2C_INSTANCE)) {
+        debug_error("Failed to initialize Display Handler");
+    }
+    
+
+    // Configure MIDI handler (optional - uses defaults if not called)
+    // midi_handler_set_channel(9);  // Channel 10 (0-indexed)
+    // midi_handler_set_note_range(60, 67);  // Middle C to G
+    
+    // Initialize USB MIDI subsystem
+    if (!usb_midi_init()) {
+        debug_error("Failed to initialize USB MIDI");
+        // Blink LED slowly to indicate error
+        gpio_init(LED_PIN);
+        gpio_set_dir(LED_PIN, GPIO_OUT);
+        while (true) {
+            gpio_put(LED_PIN, 1);
+            sleep_ms(500);
+            gpio_put(LED_PIN, 0);
+            sleep_ms(500);
+        }
+    }
+    debug_info("USB MIDI initialized");
+    
+    // Register MIDI handler callback with USB MIDI
+    usb_midi_set_rx_callback((usb_midi_rx_callback_t)midi_handler_get_callback(), NULL);
+    
+    //debug_info("MIDI Synthesizer Ready!");
+    debug_info("Waiting for USB connection...");
+   
+    // Main loop
+    while (true) {
+        // Process USB and MIDI tasks
+        usb_midi_task();
+        
+        // Add a small delay to prevent tight loop
+        sleep_us(100);
+    }
+}
