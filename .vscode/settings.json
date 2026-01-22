@@ -43,6 +43,14 @@
         "/^cd \\.\\.; C:\\\\Users\\\\Sysop\\\\\\.pico-sdk\\\\ninja\\\\v1\\.12\\.1\\\\ninja\\.exe -C build 2>&1 \\| Select-Object -Last 30$/": {
             "approve": true,
             "matchCommandLine": true
-        }
+        },
+        "/^cd \"h:\\\\midi_synthesizer\\\\midi_synthesizer\\\\build\"; while \\(\\(Get-Process ninja -ErrorAction SilentlyContinue\\) -ne \\$null\\) \\{ Start-Sleep -Milliseconds 500 \\}; if \\(Test-Path \"midi_synthesizer\\.uf2\"\\) \\{ Write-Host \"Build successful!\" -ForegroundColor Green; Get-Item \"midi_synthesizer\\.uf2\" \\| Format-Table Name, @\\{Name=\"Size\";Expression=\\{\"\\$\\(\\[math\\]::Round\\(\\$_\\.Length/1024,1\\)\\) KB\"\\}\\} -AutoSize \\} else \\{ \"Build failed\" \\}$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "Test-Path": true,
+        "Get-Item": true,
+        "ForEach-Object": true,
+        "mv": true
     }
 }

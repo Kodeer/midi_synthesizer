@@ -1,5 +1,6 @@
 #include "midi_handler.h"
 #include "i2c_midi.h"
+#include "configuration_settings.h"
 #include "debug_uart.h"
 #include "display_handler.h"
 #include "hardware/gpio.h"
@@ -9,6 +10,10 @@
 //--------------------------------------------------------------------+
 // MIDI Handler Module - Internal State
 //--------------------------------------------------------------------+
+
+// Configuration manager
+static config_manager_t config_mgr;
+static bool config_initialized = false;
 
 // I2C MIDI context
 static i2c_midi_t i2c_midi_ctx;
@@ -31,6 +36,20 @@ static bool sysex_receiving = false;
 #define SYSEX_CMD_SET_CHANNEL       0x02
 #define SYSEX_CMD_SET_SEMITONE_MODE 0x03
 #define SYSEX_CMD_QUERY_CONFIG      0x10
+
+// Configuration SysEx Commands (with EEPROM persistence)
+#define SYSEX_CMD_CONFIG_MIDI_CHANNEL   0x20
+#define SYSEX_CMD_CONFIG_NOTE_RANGE     0x21
+#define SYSEX_CMD_CONFIG_LOW_NOTE       0x22
+#define SYSEX_CMD_CONFIG_SEMITONE_MODE  0x23
+#define SYSEX_CMD_CONFIG_IO_TYPE        0x30
+#define SYSEX_CMD_CONFIG_IO_ADDRESS     0x31
+#define SYSEX_CMD_CONFIG_DISPLAY_ENABLE 0x40
+#define SYSEX_CMD_CONFIG_DISPLAY_BRIGHT 0x41
+#define SYSEX_CMD_CONFIG_DISPLAY_TIMEOUT 0x42
+#define SYSEX_CMD_CONFIG_RESET_DEFAULTS 0xF0
+#define SYSEX_CMD_CONFIG_SAVE           0xF1
+#define SYSEX_CMD_CONFIG_QUERY          0xF2
 
 //--------------------------------------------------------------------+
 // SysEx Message Processing
@@ -113,6 +132,116 @@ static void process_sysex_message(void)
                       i2c_midi_ctx.config.high_note,
                       i2c_midi_ctx.config.semitone_mode);
             break;
+        
+        // Configuration commands with EEPROM persistence
+        case SYSEX_CMD_CONFIG_MIDI_CHANNEL:
+            if (sysex_index >= 5 && config_initialized) {
+                uint8_t channel = sysex_buffer[4];
+                if (channel >= 1 && channel <= 16) {
+                    if (config_update_midi_setting(&config_mgr, 0, channel)) {
+                        // Also update runtime setting
+                        midi_handler_set_channel(channel - 1);
+                        debug_info("SysEx: MIDI channel saved to EEPROM: %d", channel);
+                        snprintf(display_msg, sizeof(display_msg), "Saved CH:%d", channel);
+                        display_handler_writeline(5, 40, display_msg);
+                    }
+                }
+            }
+            break;
+            
+        case SYSEX_CMD_CONFIG_NOTE_RANGE:
+            if (sysex_index >= 5 && config_initialized) {
+                uint8_t range = sysex_buffer[4];
+                if (range >= 1 && range <= 16) {
+                    if (config_update_midi_setting(&config_mgr, 1, range)) {
+                        debug_info("SysEx: Note range saved to EEPROM: %d", range);
+                        snprintf(display_msg, sizeof(display_msg), "Saved Range:%d", range);
+                        display_handler_writeline(5, 40, display_msg);
+                    }
+                }
+            }
+            break;
+            
+        case SYSEX_CMD_CONFIG_LOW_NOTE:
+            if (sysex_index >= 5 && config_initialized) {
+                uint8_t low_note = sysex_buffer[4];
+                if (low_note <= 127) {
+                    if (config_update_midi_setting(&config_mgr, 2, low_note)) {
+                        debug_info("SysEx: Low note saved to EEPROM: %d", low_note);
+                        snprintf(display_msg, sizeof(display_msg), "Saved Low:%d", low_note);
+                        display_handler_writeline(5, 40, display_msg);
+                    }
+                }
+            }
+            break;
+            
+        case SYSEX_CMD_CONFIG_SEMITONE_MODE:
+            if (sysex_index >= 5 && config_initialized) {
+                uint8_t mode = sysex_buffer[4];
+                if (mode <= 2) {
+                    if (config_update_midi_setting(&config_mgr, 3, mode)) {
+                        // Also update runtime setting
+                        i2c_midi_set_semitone_mode(&i2c_midi_ctx, (i2c_midi_semitone_mode_t)mode);
+                        const char* mode_names[] = {"Play", "Ignore", "Skip"};
+                        debug_info("SysEx: Semitone mode saved to EEPROM: %s", mode_names[mode]);
+                        snprintf(display_msg, sizeof(display_msg), "Saved:%s", mode_names[mode]);
+                        display_handler_writeline(5, 40, display_msg);
+                    }
+                }
+            }
+            break;
+            
+        case SYSEX_CMD_CONFIG_IO_TYPE:
+            if (sysex_index >= 6 && config_initialized) {
+                uint8_t io_type = sysex_buffer[4];
+                uint8_t io_addr = sysex_buffer[5];
+                if (io_type <= 1) {
+                    if (config_update_io_settings(&config_mgr, io_type, io_addr)) {
+                        debug_info("SysEx: IO settings saved to EEPROM: type=%d, addr=0x%02X", io_type, io_addr);
+                        display_handler_writeline(5, 40, "IO Saved");
+                    }
+                }
+            }
+            break;
+            
+        case SYSEX_CMD_CONFIG_DISPLAY_ENABLE:
+            if (sysex_index >= 5 && config_initialized) {
+                uint8_t enabled = sysex_buffer[4];
+                config_settings_t *settings = config_get_settings(&config_mgr);
+                if (settings) {
+                    config_update_display_settings(&config_mgr, enabled, 
+                        settings->display_brightness, settings->display_timeout);
+                    debug_info("SysEx: Display enable saved to EEPROM: %d", enabled);
+                }
+            }
+            break;
+            
+        case SYSEX_CMD_CONFIG_RESET_DEFAULTS:
+            if (config_initialized) {
+                if (config_erase(&config_mgr)) {
+                    debug_info("SysEx: Configuration reset to defaults");
+                    display_handler_writeline(5, 40, "Reset to Defaults");
+                    // Reload runtime settings from config
+                    config_settings_t *settings = config_get_settings(&config_mgr);
+                    if (settings) {
+                        midi_handler_set_channel(settings->midi_channel - 1);
+                        i2c_midi_set_semitone_mode(&i2c_midi_ctx, (i2c_midi_semitone_mode_t)settings->semitone_mode);
+                    }
+                }
+            }
+            break;
+            
+        case SYSEX_CMD_CONFIG_QUERY:
+            if (config_initialized) {
+                config_settings_t *settings = config_get_settings(&config_mgr);
+                if (settings) {
+                    debug_info("SysEx: Stored Config - Ch:%d, Range:%d, Low:%d, Semitone:%d, IO:0x%02X",
+                              settings->midi_channel, settings->note_range, 
+                              settings->low_note, settings->semitone_mode,
+                              settings->io_expander_address);
+                }
+            }
+            break;
             
         default:
             debug_error("SysEx: Unknown command 0x%02X", command);
@@ -188,14 +317,53 @@ bool midi_handler_init(void* i2c_inst, uint8_t sda_pin, uint8_t scl_pin,
                        uint32_t i2c_freq, uint8_t led_pin, 
                        i2c_midi_semitone_mode_t semitone_mode)
 {
-    // Initialize I2C MIDI library
-    if (!i2c_midi_init(&i2c_midi_ctx, i2c_inst, sda_pin, scl_pin, i2c_freq)) {
-        debug_error("MIDI Handler: Failed to initialize I2C MIDI");
-        return false;
-    }
+    debug_info("MIDI Handler: Initializing...");
     
-    // Set semitone mode
-    i2c_midi_set_semitone_mode(&i2c_midi_ctx, semitone_mode);
+    // Initialize configuration manager with EEPROM
+    // Using AT24C32 (4KB) at address 0x50, storing config at address 0x0000
+    if (config_init(&config_mgr, (i2c_inst_t*)i2c_inst, 0x50, 4, 0x0000)) {
+        config_initialized = true;
+        debug_info("MIDI Handler: Configuration loaded from EEPROM");
+        
+        // Get loaded settings
+        config_settings_t *settings = config_get_settings(&config_mgr);
+        if (settings) {
+            debug_info("MIDI Handler: Using stored settings - Ch:%d, Notes:%d-%d, Mode:%d",
+                      settings->midi_channel, settings->low_note,
+                      settings->low_note + settings->note_range - 1,
+                      settings->semitone_mode);
+            
+            // Initialize I2C MIDI with configuration from EEPROM
+            i2c_midi_config_t midi_config = {
+                .note_range = settings->note_range,
+                .low_note = settings->low_note,
+                .high_note = settings->low_note + settings->note_range - 1,
+                .midi_channel = settings->midi_channel - 1,  // Convert 1-16 to 0-15
+                .io_address = settings->io_expander_address,
+                .i2c_port = (i2c_inst_t*)i2c_inst,
+                .io_type = (io_expander_type_t)settings->io_expander_type,
+                .semitone_mode = (i2c_midi_semitone_mode_t)settings->semitone_mode
+            };
+            
+            if (!i2c_midi_init_with_config(&i2c_midi_ctx, &midi_config, sda_pin, scl_pin, i2c_freq)) {
+                debug_error("MIDI Handler: Failed to initialize I2C MIDI with stored config");
+                config_initialized = false;
+                return false;
+            }
+        }
+    } else {
+        debug_warn("MIDI Handler: Failed to initialize configuration manager, using defaults");
+        config_initialized = false;
+        
+        // Fallback to default initialization
+        if (!i2c_midi_init(&i2c_midi_ctx, i2c_inst, sda_pin, scl_pin, i2c_freq)) {
+            debug_error("MIDI Handler: Failed to initialize I2C MIDI");
+            return false;
+        }
+        
+        // Set semitone mode from parameter if config not available
+        i2c_midi_set_semitone_mode(&i2c_midi_ctx, semitone_mode);
+    }
     
     // Configure LED if provided
     led_gpio_pin = led_pin;

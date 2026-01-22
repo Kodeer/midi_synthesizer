@@ -5,13 +5,31 @@
 #include <stdbool.h>
 #include "hardware/i2c.h"
 
+// Conditional driver includes based on CMake options
+#ifdef USE_PCF857X_DRIVER
+#include "drivers/pcf857x_driver.h"
+#endif
+
+#ifdef USE_CH423_DRIVER
+#include "drivers/ch423_driver.h"
+#endif
+
 // Default configuration values
 #define I2C_MIDI_DEFAULT_NOTE_RANGE 8
 #define I2C_MIDI_DEFAULT_LOW_NOTE 60  // Middle C
 #define I2C_MIDI_DEFAULT_CHANNEL 10   // Percussion channel
 
-// PCF8574 default I2C address
-#define PCF8574_DEFAULT_ADDRESS 0x20
+/**
+ * Supported IO expander types
+ */
+typedef enum {
+#ifdef USE_PCF857X_DRIVER
+    IO_EXPANDER_PCF8574 = 0,  // PCF857x driver (PCF8574/PCF8575)
+#endif
+#ifdef USE_CH423_DRIVER
+    IO_EXPANDER_CH423 = 1     // CH423 16-bit I/O expander
+#endif
+} io_expander_type_t;
 
 /**
  * Semitone handling modes
@@ -34,8 +52,9 @@ typedef struct {
     uint8_t low_note;                       // Lowest note to respond to (default 60 - Middle C)
     uint8_t high_note;                      // Highest note (calculated based on note_range and semitone_mode)
     uint8_t midi_channel;                   // MIDI channel to listen to (default 10)
-    uint8_t pcf8574_address;                // I2C address of PCF8574
+    uint8_t io_address;                     // I2C address of IO expander
     i2c_inst_t *i2c_port;                   // I2C port to use (i2c0 or i2c1)
+    io_expander_type_t io_type;             // Type of IO expander to use
     i2c_midi_semitone_mode_t semitone_mode; // How to handle semitone notes
 } i2c_midi_config_t;
 
@@ -44,7 +63,15 @@ typedef struct {
  */
 typedef struct {
     i2c_midi_config_t config;
-    uint8_t pin_state;       // Current state of PCF8574 pins (bit mask)
+    union {
+#ifdef USE_PCF857X_DRIVER
+        pcf857x_t pcf857x;    // PCF857x driver context (PCF8574/PCF8575)
+#endif
+#ifdef USE_CH423_DRIVER
+        ch423_t ch423;        // CH423 driver context
+#endif
+    } driver;
+    uint8_t pin_state;         // Current state of IO pins (bit mask)
 } i2c_midi_t;
 
 /**

@@ -1,15 +1,22 @@
-# I2C MIDI Library for PCF8574
+# I2C MIDI Library for GPIO Expanders
 
-This library enables interfacing MIDI note messages with the PCF8574 I2C GPIO extender chip. It translates MIDI NOTE ON/OFF messages into digital pin states on the PCF8574, making it ideal for controlling percussion instruments, solenoids, or other actuators via MIDI.
+This library enables interfacing MIDI note messages with I2C GPIO extender chips. It translates MIDI NOTE ON/OFF messages into digital pin states, making it ideal for controlling percussion instruments, solenoids, or other actuators via MIDI.
+
+## Supported IO Expanders
+
+- **PCF8574**: 8-bit GPIO expander (default)
+- **PCF8575**: 16-bit GPIO expander (compatible with PCF8574 API)
+- **CH423**: 16-bit GPIO expander with open-collector and push-pull outputs
 
 ## Features
 
 - Automatic MIDI channel filtering
 - Configurable note range mapping
 - **Semitone handling modes**: play, ignore, or skip to next whole tone
-- Direct PCF8574 control via I2C
+- **Multiple IO expander support**: PCF8574 (8-bit), PCF8575 (16-bit), or CH423 (16-bit)
+- Driver abstraction layer for easy expansion
 - Support for NOTE ON/OFF with velocity detection
-- 8 available output pins (P0-P7)
+- Up to 16 available output pins (CH423/PCF8575) or 8 pins (PCF8574)
 - Debug output support for troubleshooting
 
 ## Semitone Handling Modes
@@ -32,9 +39,10 @@ The library supports three modes for handling semitone (sharp/flat) notes:
 - **I2C Port**: I2C0
 - **SDA Pin**: GPIO 4
 - **SCL Pin**: GPIO 5
-- **PCF8574 Address**: 0x20
+- **PCF8574 Address**: 0x20 (default)
+- **CH423 Address**: 0x24 (default)
 
-### PCF8574 Wiring:
+### PCF8574 Wiring (8-bit):
 ```
 Pico              PCF8574
 ----              -------
@@ -45,6 +53,34 @@ GPIO 5   ------>  SCL
                   
 PCF8574 Pins:     Your Device
 P0-P7    ------>  Actuators/LEDs/etc
+```
+
+### PCF8575 Wiring (16-bit):
+```
+Pico              PCF8575
+----              -------
+3.3V     ------>  VCC
+GND      ------>  GND
+GPIO 4   ------>  SDA
+GPIO 5   ------>  SCL
+                  
+PCF8575 Pins:     Your Device
+P00-P07  ------>  Actuators/LEDs/etc (Port 0)
+P10-P17  ------>  Actuators/LEDs/etc (Port 1)
+```
+
+### CH423 Wiring (16-bit):
+```
+Pico              CH423
+----              -----
+3.3V/5V  ------>  VCC
+GND      ------>  GND
+GPIO 4   ------>  SDA
+GPIO 5   ------>  SCL
+                  
+CH423 Pins:       Your Device
+OC0-OC7  ------>  Actuators (open-collector)
+PP0-PP7  ------>  LEDs (push-pull)
 ```
 
 ## Usage
@@ -63,7 +99,7 @@ i2c_midi_t i2c_midi_ctx;
 i2c_midi_init(&i2c_midi_ctx, i2c0, 4, 5, 100000);
 ```
 
-### Custom Configuration
+### Custom Configuration (PCF8574)
 
 ```c
 i2c_midi_t i2c_midi_ctx;
@@ -72,8 +108,27 @@ i2c_midi_config_t config = {
     .low_note = 36,                          // Start at C1 (bass drum in GM)
     .high_note = 43,                         // Calculated automatically
     .midi_channel = 10,                      // Percussion channel
-    .pcf8574_address = 0x20,                 // PCF8574 I2C address
+    .io_address = 0x20,                      // PCF8574 I2C address
     .i2c_port = i2c0,                        // Use I2C0
+    .io_type = IO_EXPANDER_PCF8574,          // Select PCF8574 driver
+    .semitone_mode = I2C_MIDI_SEMITONE_PLAY  // Play semitones (default)
+};
+
+i2c_midi_init_with_config(&i2c_midi_ctx, &config, 4, 5, 100000);
+```
+
+### Custom Configuration (CH423 - 16-bit)
+
+```c
+i2c_midi_t i2c_midi_ctx;
+i2c_midi_config_t config = {
+    .note_range = 16,                        // Handle 16 notes
+    .low_note = 36,                          // Start at C1
+    .high_note = 51,                         // Calculated automatically
+    .midi_channel = 10,                      // Percussion channel
+    .io_address = 0x24,                      // CH423 I2C address
+    .i2c_port = i2c0,                        // Use I2C0
+    .io_type = IO_EXPANDER_CH423,            // Select CH423 driver
     .semitone_mode = I2C_MIDI_SEMITONE_PLAY  // Play semitones (default)
 };
 
@@ -131,11 +186,14 @@ uint8_t state = i2c_midi_get_pin_state(&i2c_midi_ctx);
 | `low_note` | 60 | Middle C (C4) |
 | `high_note` | 67 | Calculated as low_note + note_range - 1 |
 | `midi_channel` | 10 | MIDI channel (percussion) |
-| `pcf8574_address` | 0x20 | I2C address of PCF8574 |
+| `io_address` | 0x20 | I2C address (0x20 for PCF8574, 0x24 for CH423) |
+| `io_type` | IO_EXPANDER_PCF8574 | IO expander type |
 
 ## Note to Pin Mapping
 
-The library maps MIDI notes to PCF8574 pins based on the configured note range:
+The library maps MIDI notes to GPIO expander pins based on the configured note range:
+
+### PCF8574 (8-bit)
 
 ```
 MIDI Note          PCF8574 Pin
@@ -148,6 +206,52 @@ low_note + 4  -->  P4
 low_note + 5  -->  P5
 low_note + 6  -->  P6
 low_note + 7  -->  P7
+```
+
+### PCF8575 (16-bit)
+
+```
+MIDI Note          PCF8575 Pin
+---------          -----------
+low_note + 0  -->  P00
+low_note + 1  -->  P01
+low_note + 2  -->  P02
+low_note + 3  -->  P03
+low_note + 4  -->  P04
+low_note + 5  -->  P05
+low_note + 6  -->  P06
+low_note + 7  -->  P07
+low_note + 8  -->  P10
+low_note + 9  -->  P11
+low_note + 10 -->  P12
+low_note + 11 -->  P13
+low_note + 12 -->  P14
+low_note + 13 -->  P15
+low_note + 14 -->  P16
+low_note + 15 -->  P17
+```
+
+### CH423 (16-bit)
+
+```
+MIDI Note          CH423 Pin
+---------          ---------
+low_note + 0  -->  OC0 (Open-Collector)
+low_note + 1  -->  OC1 (Open-Collector)
+low_note + 2  -->  OC2 (Open-Collector)
+low_note + 3  -->  OC3 (Open-Collector)
+low_note + 4  -->  OC4 (Open-Collector)
+low_note + 5  -->  OC5 (Open-Collector)
+low_note + 6  -->  OC6 (Open-Collector)
+low_note + 7  -->  OC7 (Open-Collector)
+low_note + 8  -->  PP0 (Push-Pull)
+low_note + 9  -->  PP1 (Push-Pull)
+low_note + 10 -->  PP2 (Push-Pull)
+low_note + 11 -->  PP3 (Push-Pull)
+low_note + 12 -->  PP4 (Push-Pull)
+low_note + 13 -->  PP5 (Push-Pull)
+low_note + 14 -->  PP6 (Push-Pull)
+low_note + 15 -->  PP7 (Push-Pull)
 ```
 
 ### Example: Default Configuration (Notes 60-67)
@@ -187,8 +291,9 @@ The library automatically filters MIDI messages:
 - **NOTE OFF**: Sets corresponding pin LOW
 - **NOTE ON** (velocity = 0): Treated as NOTE OFF, sets pin LOW
 
-## PCF8574 I2C Addresses
+## IO Expander I2C Addresses
 
+### PCF8574 (8-bit)
 The PCF8574 typically has addresses in the range 0x20-0x27 depending on A0-A2 pins:
 
 | A2 | A1 | A0 | Address |
@@ -201,6 +306,23 @@ The PCF8574 typically has addresses in the range 0x20-0x27 depending on A0-A2 pi
 | 1  | 0  | 1  | 0x25    |
 | 1  | 1  | 0  | 0x26    |
 | 1  | 1  | 1  | 0x27    |
+
+### PCF8575 (16-bit)
+The PCF8575 typically has addresses in the range 0x20-0x27 depending on A0-A2 pins:
+
+| A2 | A1 | A0 | Address |
+|----|----|----|---------|
+| 0  | 0  | 0  | 0x20    |
+| 0  | 0  | 1  | 0x21    |
+| 0  | 1  | 0  | 0x22    |
+| 0  | 1  | 1  | 0x23    |
+| 1  | 0  | 0  | 0x24    |
+| 1  | 0  | 1  | 0x25    |
+| 1  | 1  | 0  | 0x26    |
+| 1  | 1  | 1  | 0x27    |
+
+### CH423 (16-bit)
+The CH423 default I2C address is **0x24** (can be configured via hardware pins).
 
 ## Example: Complete Implementation
 

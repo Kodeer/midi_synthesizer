@@ -1,7 +1,80 @@
 #include "i2c_midi.h"
+#ifdef USE_PCF857X_DRIVER
+#include "drivers/pcf857x_driver.h"
+#endif
+#ifdef USE_CH423_DRIVER
+#include "drivers/ch423_driver.h"
+#endif
 #include "hardware/gpio.h"
 #include "../../src/debug_uart.h"
 #include <string.h>
+
+//--------------------------------------------------------------------+
+// IO Expander Abstraction Layer
+//--------------------------------------------------------------------+
+
+/**
+ * Write data to IO expander
+ */
+static bool io_write(i2c_midi_t *ctx, uint8_t data) {
+    switch (ctx->config.io_type) {
+#ifdef USE_PCF857X_DRIVER
+        case IO_EXPANDER_PCF8574:
+            return pcf857x_write(&ctx->driver.pcf857x, data);
+#endif
+#ifdef USE_CH423_DRIVER
+        case IO_EXPANDER_CH423:
+            // For CH423, extend 8-bit data to 16-bit (low byte only)
+            return ch423_write(&ctx->driver.ch423, (uint16_t)data);
+#endif
+        default:
+            debug_error("I2C_MIDI: Unknown IO expander type: %d", ctx->config.io_type);
+            return false;
+    }
+}
+
+/**
+ * Set a specific pin on the IO expander
+ */
+static bool io_set_pin(i2c_midi_t *ctx, uint8_t pin, bool state) {
+    switch (ctx->config.io_type) {
+#ifdef USE_PCF857X_DRIVER
+        case IO_EXPANDER_PCF8574:
+            if (pin >= 8) return false;  // PCF857x driver handles 8 or 16 pins
+            return pcf857x_set_pin(&ctx->driver.pcf857x, pin, state);
+#endif
+#ifdef USE_CH423_DRIVER
+        case IO_EXPANDER_CH423:
+            if (pin >= 16) return false;  // CH423 has 16 pins
+            return ch423_set_pin(&ctx->driver.ch423, pin, state);
+#endif
+        default:
+            debug_error("I2C_MIDI: Unknown IO expander type: %d", ctx->config.io_type);
+            return false;
+    }
+}
+
+/**
+ * Get maximum number of pins for the configured IO expander
+ */
+static uint8_t io_get_max_pins(i2c_midi_t *ctx) {
+    switch (ctx->config.io_type) {
+#ifdef USE_PCF857X_DRIVER
+        case IO_EXPANDER_PCF8574:
+            return pcf857x_get_num_pins(&ctx->driver.pcf857x);
+#endif
+#ifdef USE_CH423_DRIVER
+        case IO_EXPANDER_CH423:
+            return 16;
+#endif
+        default:
+            return 0;
+    }
+}
+
+//--------------------------------------------------------------------+
+// Semitone Handling Functions
+//--------------------------------------------------------------------+
 
 /**
  * Check if a MIDI note is a semitone (sharp/flat note)
@@ -61,19 +134,9 @@ static uint8_t map_note_for_mode(uint8_t note, i2c_midi_semitone_mode_t mode) {
     return note;
 }
 
-/**
- * Write data to PCF8574
- */
-static bool pcf8574_write(i2c_midi_t *ctx, uint8_t data) {
-    int result = i2c_write_blocking(ctx->config.i2c_port, ctx->config.pcf8574_address, &data, 1, false);
-    if (result == 1) {
-        debug_printf("I2C_MIDI: PCF8574 write success: 0x%02X\n", data);
-        return true;
-    } else {
-        debug_error("I2C_MIDI: PCF8574 write failed (result=%d, addr=0x%02X, data=0x%02X)", result, ctx->config.pcf8574_address, data);
-        return false;
-    }
-}
+//--------------------------------------------------------------------+
+// Initialization Functions
+//--------------------------------------------------------------------+
 
 /**
  * Initialize the I2C MIDI library with default configuration
@@ -90,17 +153,31 @@ bool i2c_midi_init(i2c_midi_t *ctx, i2c_inst_t *i2c_port, uint sda_pin, uint scl
     ctx->config.note_range = I2C_MIDI_DEFAULT_NOTE_RANGE;
     ctx->config.low_note = I2C_MIDI_DEFAULT_LOW_NOTE;
     ctx->config.midi_channel = I2C_MIDI_DEFAULT_CHANNEL;
-    ctx->config.pcf8574_address = PCF8574_DEFAULT_ADDRESS;
     ctx->config.i2c_port = i2c_port;
+#ifdef USE_PCF857X_DRIVER
+    ctx->config.io_address = PCF857X_DEFAULT_ADDRESS;
+    ctx->config.io_type = IO_EXPANDER_PCF8574;  // Default to PCF857x
+#elif defined(USE_CH423_DRIVER)
+    ctx->config.io_address = CH423_DEFAULT_ADDRESS;
+    ctx->config.io_type = IO_EXPANDER_CH423;  // Default to CH423
+#endif
     ctx->config.semitone_mode = I2C_MIDI_SEMITONE_PLAY; // Default: play semitones normally
     ctx->config.high_note = calculate_high_note(ctx->config.low_note, ctx->config.note_range, ctx->config.semitone_mode);
     ctx->pin_state = 0x00;
 
     const char* mode_str = (ctx->config.semitone_mode == I2C_MIDI_SEMITONE_PLAY) ? "PLAY" :
                           (ctx->config.semitone_mode == I2C_MIDI_SEMITONE_IGNORE) ? "IGNORE" : "SKIP";
-    debug_info("I2C_MIDI: Config - Ch:%d, Notes:%d-%d, PCF8574:0x%02X, Semitone:%s", 
+    const char* io_str = 
+#ifdef USE_PCF857X_DRIVER
+        (ctx->config.io_type == IO_EXPANDER_PCF8574) ? "PCF857x" :
+#endif
+#ifdef USE_CH423_DRIVER
+        (ctx->config.io_type == IO_EXPANDER_CH423) ? "CH423" :
+#endif
+        "Unknown";
+    debug_info("I2C_MIDI: Config - Ch:%d, Notes:%d-%d, IO:%s@0x%02X, Semitone:%s", 
                ctx->config.midi_channel, ctx->config.low_note, ctx->config.high_note, 
-               ctx->config.pcf8574_address, mode_str);
+               io_str, ctx->config.io_address, mode_str);
 
     // Initialize I2C
     i2c_init(i2c_port, baudrate);
@@ -111,15 +188,28 @@ bool i2c_midi_init(i2c_midi_t *ctx, i2c_inst_t *i2c_port, uint sda_pin, uint scl
     
     debug_info("I2C_MIDI: I2C initialized at %d Hz", baudrate);
 
-    // Try to reset PCF8574 pins to LOW (non-critical, may fail if not connected)
-    debug_info("I2C_MIDI: Testing PCF8574 connection...");
-    if (!pcf8574_write(ctx, 0x00)) {
-        debug_error("I2C_MIDI: Warning - PCF8574 not responding (may not be connected)");
-    } else {
-        debug_info("I2C_MIDI: PCF8574 detected and initialized");
+    // Initialize IO expander driver
+    switch (ctx->config.io_type) {
+#ifdef USE_PCF857X_DRIVER
+        case IO_EXPANDER_PCF8574:
+            if (!pcf857x_init(&ctx->driver.pcf857x, i2c_port, ctx->config.io_address, PCF8574_CHIP)) {
+                debug_error("I2C_MIDI: PCF857x initialization failed");
+            }
+            break;
+#endif
+#ifdef USE_CH423_DRIVER
+        case IO_EXPANDER_CH423:
+            if (!ch423_init(&ctx->driver.ch423, i2c_port, ctx->config.io_address)) {
+                debug_error("I2C_MIDI: CH423 initialization failed");
+            }
+            break;
+#endif
+        default:
+            debug_error("I2C_MIDI: Unknown IO expander type");
+            break;
     }
     
-    // Always return true - PCF8574 might not be connected yet
+    // Always return true - IO expander might not be connected yet
     return true;
 }
 
@@ -145,12 +235,29 @@ bool i2c_midi_init_with_config(i2c_midi_t *ctx, i2c_midi_config_t *config, uint 
     gpio_pull_up(sda_pin);
     gpio_pull_up(scl_pin);
 
-    // Try to reset PCF8574 pins to LOW (non-critical, may fail if not connected)
-    pcf8574_write(ctx, 0x00);
+    // Initialize IO expander driver
+    switch (ctx->config.io_type) {
+#ifdef USE_PCF857X_DRIVER
+        case IO_EXPANDER_PCF8574:
+            pcf857x_init(&ctx->driver.pcf857x, config->i2c_port, ctx->config.io_address, PCF8574_CHIP);
+            break;
+#endif
+#ifdef USE_CH423_DRIVER
+        case IO_EXPANDER_CH423:
+            ch423_init(&ctx->driver.ch423, config->i2c_port, ctx->config.io_address);
+            break;
+#endif
+        default:
+            break;
+    }
     
-    // Always return true - PCF8574 might not be connected yet
+    // Always return true - IO expander might not be connected yet
     return true;
 }
+
+//--------------------------------------------------------------------+
+// MIDI Message Processing
+//--------------------------------------------------------------------+
 
 /**
  * Process a MIDI message
@@ -203,8 +310,9 @@ bool i2c_midi_process_message(i2c_midi_t *ctx, uint8_t status, uint8_t note, uin
         }
     }
     
-    if (pin >= 8) {
-        debug_error("I2C_MIDI: Pin calculation error: %d", pin);
+    uint8_t max_pins = io_get_max_pins(ctx);
+    if (pin >= max_pins) {
+        debug_error("I2C_MIDI: Pin calculation error: %d (max: %d)", pin, max_pins);
         return false; // Safety check
     }
 
@@ -230,12 +338,21 @@ bool i2c_midi_process_message(i2c_midi_t *ctx, uint8_t status, uint8_t note, uin
     return result;
 }
 
+//--------------------------------------------------------------------+
+// Pin Control Functions
+//--------------------------------------------------------------------+
+
 /**
- * Set a specific pin on the PCF8574
+ * Set a specific pin on the IO expander
  */
 bool i2c_midi_set_pin(i2c_midi_t *ctx, uint8_t pin, bool state) {
-    if (!ctx || pin >= 8) {
-        debug_error("I2C_MIDI: Invalid pin %d", pin);
+    if (!ctx) {
+        return false;
+    }
+
+    uint8_t max_pins = io_get_max_pins(ctx);
+    if (pin >= max_pins) {
+        debug_error("I2C_MIDI: Invalid pin %d (max: %d)", pin, max_pins);
         return false;
     }
 
@@ -251,8 +368,8 @@ bool i2c_midi_set_pin(i2c_midi_t *ctx, uint8_t pin, bool state) {
     debug_printf("I2C_MIDI: Pin %d -> %s (state: 0x%02X -> 0x%02X)\n", 
                 pin, state ? "HIGH" : "LOW", old_state, ctx->pin_state);
 
-    // Write to PCF8574
-    return pcf8574_write(ctx, ctx->pin_state);
+    // Write to IO expander through abstraction layer
+    return io_set_pin(ctx, pin, state);
 }
 
 /**
@@ -300,5 +417,5 @@ bool i2c_midi_reset(i2c_midi_t *ctx) {
     }
 
     ctx->pin_state = 0x00;
-    return pcf8574_write(ctx, 0x00);
+    return io_write(ctx, 0x00);
 }

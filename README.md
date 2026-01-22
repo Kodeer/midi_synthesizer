@@ -4,12 +4,14 @@ A USB MIDI to I2C MIDI converter for Raspberry Pi Pico with OLED display support
 
 ## Overview
 
-The Zoft Synthesizer receives MIDI messages via USB and outputs them through an I2C interface to control external devices (via PCF8574 GPIO expander). It features real-time note display on an SSD1306 OLED screen and comprehensive debug output via UART.
+The Zoft Synthesizer receives MIDI messages via USB and outputs them through an I2C interface to control external devices via GPIO expanders (PCF8574 or CH423). It features real-time note display on an SSD1306 OLED screen and comprehensive debug output via UART.
 
 ## Features
 
 - **USB MIDI Device**: Full USB MIDI support using TinyUSB
-- **I2C MIDI Output**: Controls PCF8574 GPIO expander (address 0x20)
+- **I2C MIDI Output**: Controls GPIO expanders:
+  - PCF8574 (8-bit, address 0x20)
+  - CH423 (16-bit, address 0x24)
 - **OLED Display**: 128x64 SSD1306 display showing:
   - Startup message: "Zoft Synthesizer V1.0"
   - Real-time MIDI note information (note name, velocity, channel)
@@ -29,7 +31,9 @@ The Zoft Synthesizer receives MIDI messages via USB and outputs them through an 
 - USB connection for MIDI and power
 
 ### I2C Devices (on I2C1 bus)
-- **PCF8574 GPIO Expander**: Address 0x20
+- **GPIO Expander** (choose one):
+  - **PCF8574**: 8-bit, Address 0x20
+  - **CH423**: 16-bit, Address 0x24
   - SDA: GP2
   - SCL: GP3
 - **SSD1306 OLED Display**: 128x64 pixels, Address 0x3C
@@ -288,7 +292,10 @@ midi_synthesizer/
 - Configuration status display
 
 ### I2C MIDI Library (`lib/i2c_midi/`)
-- PCF8574 GPIO control
+- Multi-driver GPIO expander support
+- PCF8574 driver (8-bit)
+- CH423 driver (16-bit with OC/PP outputs)
+- IO abstraction layer
 - Note-to-GPIO mapping
 - Configurable note range
 - Semitone handling logic
@@ -311,10 +318,14 @@ midi_synthesizer/
 - Check I2C address (0x3C for most SSD1306 displays)
 - Monitor debug output for initialization errors
 
-### PCF8574 Not Responding
-- The synthesizer continues to operate even if PCF8574 is not connected
-- Check I2C address (0x20 default)
+### GPIO Expander Not Responding
+- The synthesizer continues to operate even if the GPIO expander is not connected
+- Check I2C address:
+  - PCF8574: 0x20 (default)
+  - CH423: 0x24 (default)
+- Verify correct `io_type` is configured in code
 - Verify I2C pull-up resistors (4.7kΩ recommended)
+- Monitor debug output for initialization errors
 
 ### SysEx Commands Not Working
 - Ensure all 7 bytes are sent including F0 and F7

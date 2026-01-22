@@ -42,11 +42,19 @@ project(midi_synthesizer C CXX ASM)
 # Initialise the Raspberry Pi Pico SDK
 pico_sdk_init()
 
+# Configure I2C MIDI drivers (optional - defaults to both ON)
+# Uncomment to disable drivers you don't need:
+# set(USE_PCF857X_DRIVER OFF CACHE BOOL "Disable PCF857x driver" FORCE)
+# set(USE_CH423_DRIVER OFF CACHE BOOL "Disable CH423 driver" FORCE)
+
 # Add i2c_midi library subdirectory
 add_subdirectory(lib/i2c_midi)
 
 # Add oled_display library subdirectory
 add_subdirectory(lib/oled_display)
+
+# Add i2c_memory library subdirectory
+add_subdirectory(lib/i2c_memory)
 
 # IMPORTANT: Set TinyUSB compile options BEFORE adding executable
 set(PICO_TINYUSB_PATH ${PICO_SDK_PATH}/lib/tinyusb)
@@ -60,6 +68,7 @@ add_executable(midi_synthesizer
     src/debug_uart.c
     src/display_handler.c
     src/usb_descriptors.c
+    src/configuration_settings.c
 )
 
 # Add tusb_config.h directory
@@ -78,7 +87,8 @@ target_link_libraries(midi_synthesizer
         hardware_uart
         hardware_i2c
         i2c_midi
-        oled_display)
+        oled_display
+        i2c_memory)
 
 # Link TinyUSB after stdlib so our config takes precedence
 target_link_libraries(midi_synthesizer
