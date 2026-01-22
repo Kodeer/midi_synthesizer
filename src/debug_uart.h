@@ -79,6 +79,16 @@ void debug_print_hex(const uint8_t* data, size_t length, const char* label);
 void debug_error(const char* format, ...);
 
 /**
+ * @brief Print a warning message to debug UART
+ * 
+ * Only prints if debug is enabled.
+ * 
+ * @param format Printf-style format string
+ * @param ... Variable arguments
+ */
+void debug_warn(const char* format, ...);
+
+/**
  * @brief Print an info message to debug UART
  * 
  * Only prints if debug is enabled.

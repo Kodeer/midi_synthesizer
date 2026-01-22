@@ -153,6 +153,27 @@ void debug_error(const char* format, ...)
     }
 }
 
+void debug_warn(const char* format, ...)
+{
+    if (!debug_uart_instance || !debug_enabled || !format) {
+        return;
+    }
+    
+    uart_puts(debug_uart_instance, "[WARN] ");
+    
+    va_list args;
+    va_start(args, format);
+    vsnprintf(debug_buffer, DEBUG_BUFFER_SIZE, format, args);
+    va_end(args);
+    
+    uart_puts(debug_uart_instance, debug_buffer);
+    
+    // Ensure newline
+    if (debug_buffer[strlen(debug_buffer) - 1] != '\n') {
+        uart_puts(debug_uart_instance, "\n");
+    }
+}
+
 void debug_info(const char* format, ...)
 {
     if (!debug_uart_instance || !debug_enabled || !format) {

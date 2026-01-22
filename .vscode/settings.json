@@ -51,6 +51,7 @@
         "Test-Path": true,
         "Get-Item": true,
         "ForEach-Object": true,
-        "mv": true
+        "mv": true,
+        "&": true
     }
 }

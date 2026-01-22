@@ -4,13 +4,14 @@ A USB MIDI to I2C MIDI converter for Raspberry Pi Pico with OLED display support
 
 ## Overview
 
-The Zoft Synthesizer receives MIDI messages via USB and outputs them through an I2C interface to control external devices via GPIO expanders (PCF8574 or CH423). It features real-time note display on an SSD1306 OLED screen and comprehensive debug output via UART.
+The Zoft Synthesizer receives MIDI messages via USB and outputs them through an I2C interface to control external devices via GPIO expanders (PCF8574/PCF8575 or CH423). It features real-time note display on an SSD1306 OLED screen and comprehensive debug output via UART.
 
 ## Features
 
 - **USB MIDI Device**: Full USB MIDI support using TinyUSB
 - **I2C MIDI Output**: Controls GPIO expanders:
   - PCF8574 (8-bit, address 0x20)
+  - PCF8575 (16-bit, address 0x20)
   - CH423 (16-bit, address 0x24)
 - **OLED Display**: 128x64 SSD1306 display showing:
   - Startup message: "Zoft Synthesizer V1.0"
@@ -32,8 +33,9 @@ The Zoft Synthesizer receives MIDI messages via USB and outputs them through an 
 
 ### I2C Devices (on I2C1 bus)
 - **GPIO Expander** (choose one):
-  - **PCF8574**: 8-bit, Address 0x20
-  - **CH423**: 16-bit, Address 0x24
+  - **PCF8574**: 8-bit I/O expander, Address 0x20
+  - **PCF8575**: 16-bit I/O expander, Address 0x20
+  - **CH423**: 16-bit I/O expander with OC/PP outputs, Address 0x24
   - SDA: GP2
   - SCL: GP3
 - **SSD1306 OLED Display**: 128x64 pixels, Address 0x3C
@@ -259,8 +261,11 @@ midi_synthesizer/
 │   ├── usb_descriptors.c       # USB device descriptors
 │   └── tusb_config.h           # TinyUSB configuration
 ├── lib/
-│   ├── i2c_midi/               # I2C MIDI library (PCF8574)
+│   ├── i2c_midi/               # I2C MIDI library (PCF857x/CH423)
 │   │   ├── i2c_midi.c/h
+│   │   ├── drivers/
+│   │   │   ├── pcf857x_driver.c/h  # PCF8574/PCF8575 driver
+│   │   │   └── ch423_driver.c/h    # CH423 driver
 │   │   └── CMakeLists.txt
 │   └── oled_display/           # SSD1306 OLED driver
 │       ├── oled_display.c/h
@@ -293,7 +298,7 @@ midi_synthesizer/
 
 ### I2C MIDI Library (`lib/i2c_midi/`)
 - Multi-driver GPIO expander support
-- PCF8574 driver (8-bit)
+- PCF857x driver (supports both PCF8574 8-bit and PCF8575 16-bit)
 - CH423 driver (16-bit with OC/PP outputs)
 - IO abstraction layer
 - Note-to-GPIO mapping
@@ -321,9 +326,11 @@ midi_synthesizer/
 ### GPIO Expander Not Responding
 - The synthesizer continues to operate even if the GPIO expander is not connected
 - Check I2C address:
-  - PCF8574: 0x20 (default)
+  - PCF8574/PCF8575: 0x20 (default)
   - CH423: 0x24 (default)
-- Verify correct `io_type` is configured in code
+- Verify correct `io_type` is configured:
+  - PCF857x (supports both PCF8574 and PCF8575)
+  - CH423
 - Verify I2C pull-up resistors (4.7kΩ recommended)
 - Monitor debug output for initialization errors
 
