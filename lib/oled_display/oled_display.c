@@ -226,11 +226,44 @@ void oled_draw_char(uint8_t x, uint8_t y, char c) {
     }
 }
 
+void oled_draw_char_inverted(uint8_t x, uint8_t y, char c) {
+    if (c < 32 || c > 126) c = 32; // Printable ASCII only (32-126)
+    
+    const uint8_t* glyph = font5x7[c - 32];
+    
+    // Draw background box (6x8 pixels for 5x7 font with spacing)
+    for (int i = 0; i < 6; i++) {
+        for (int j = 0; j < 8; j++) {
+            oled_set_pixel(x + i, y + j, 1);
+        }
+    }
+    
+    // Draw character in black (inverted)
+    for (int i = 0; i < 5; i++) {
+        uint8_t line = glyph[i];
+        for (int j = 0; j < 8; j++) {
+            if (line & (1 << j)) {
+                oled_set_pixel(x + i, y + j, 0);
+            }
+        }
+    }
+}
+
 void oled_draw_string(uint8_t x, uint8_t y, const char* str) {
     uint8_t curr_x = x;
     while (*str) {
         if (curr_x + 6 > OLED_WIDTH) break;
         oled_draw_char(curr_x, y, *str);
+        curr_x += 6;
+        str++;
+    }
+}
+
+void oled_draw_string_inverted(uint8_t x, uint8_t y, const char* str) {
+    uint8_t curr_x = x;
+    while (*str) {
+        if (curr_x + 6 > OLED_WIDTH) break;
+        oled_draw_char_inverted(curr_x, y, *str);
         curr_x += 6;
         str++;
     }

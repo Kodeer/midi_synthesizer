@@ -16,7 +16,19 @@ The Zoft Synthesizer receives MIDI messages via USB and outputs them through an 
 - **OLED Display**: 128x64 SSD1306 display showing:
   - Startup message: "Zoft Synthesizer V1.0"
   - Real-time MIDI note information (note name, velocity, channel)
-  - Configuration changes
+  - Interactive menu system with inverted text highlighting
+- **Button Interface**: Single button on GPIO 4 for menu navigation:
+  - Short press: Cycle through menu options
+  - Hold 3 seconds: Enter menu or execute selected option
+- **Menu System**: 7 configurable options:
+  1. Reset Defaults
+  2. Save Config
+  3. MIDI Channel (1-16)
+  4. Note Range
+  5. Semitone Mode (Natural/Sharp/Flat)
+  6. All Notes Off
+  7. Exit Menu
+- **Configuration Storage**: EEPROM persistence (AT24C32, address 0x50)
 - **Debug Output**: Comprehensive UART logging at 115200 baud
 - **LED Feedback**: Visual indication of MIDI note activity
 - **Configurable via SysEx**:
@@ -40,6 +52,13 @@ The Zoft Synthesizer receives MIDI messages via USB and outputs them through an 
   - SCL: GP3
 - **SSD1306 OLED Display**: 128x64 pixels, Address 0x3C
   - Shares I2C1 bus
+- **AT24C32 EEPROM**: 32K EEPROM for configuration storage, Address 0x50
+  - Shares I2C1 bus
+
+### Button Interface
+- GPIO: GP4
+- Function: Menu navigation and configuration
+- Active: Low (internal pull-up enabled)
 
 ### Debug UART
 - TX: GP0
@@ -112,6 +131,74 @@ The synthesizer supports three modes for handling semitones (black keys):
 - **PLAY** (0): Play all notes including semitones
 - **IGNORE** (1): Ignore semitone notes completely
 - **SKIP** (2): Map semitones to the next full tone
+
+## Button and Menu System
+
+### Button Operation
+
+The synthesizer features a single button on GPIO 4 for menu navigation:
+
+- **Short Press** (< 3 seconds): Cycle to next menu option
+- **Long Press** (≥ 3 seconds): 
+  - If not in menu: Enter menu mode
+  - If in menu: Execute selected option
+
+### Menu Options
+
+When you hold the button for 3 seconds, the menu system activates showing:
+
+```
+======= MENU =======
+
+ 2. Save Config      
+█1. Reset Defaults  █  <- Selected (inverted display)
+ 3. MIDI Channel     
+```
+
+The menu provides 7 configuration options:
+
+1. **Reset Defaults**: Restore factory settings
+   - Channel: 1
+   - Note Range: 60-84 (C4-C6)
+   - Semitone Mode: SKIP
+   - Requires reboot to apply
+
+2. **Save Config**: Save current settings to EEPROM
+   - Persists across power cycles
+   - Shows "Config Saved!" confirmation
+
+3. **MIDI Channel**: Cycle through channels 1-16
+   - Immediate effect
+   - Updates display temporarily
+
+4. **Note Range**: Configure via SysEx messages
+   - Menu displays "Use SysEx" reminder
+
+5. **Semitone Mode**: Toggle between PLAY/IGNORE/SKIP
+   - PLAY: All notes including sharps/flats
+   - IGNORE: Skip semitone notes
+   - SKIP: Map semitones to next natural note
+
+6. **All Notes Off**: Emergency stop
+   - Resets all I2C MIDI pins
+   - Exits menu automatically
+
+7. **Exit Menu**: Return to normal operation
+   - Displays "Zoft Synthesizer V1"
+
+### Visual Feedback
+
+- **Inverted Text**: Selected menu item shows black text on white background
+- **Numbered Items**: Each option numbered 1-7
+- **Padded Width**: Uniform highlighting bar across all options
+- **Centered Header**: Menu title centered with equal padding
+
+### Configuration Storage
+
+Settings saved via the menu are stored in AT24C32 EEPROM:
+- Survives power cycles
+- Loaded automatically on startup
+- Defaults used if EEPROM not present
 
 ## System Exclusive (SysEx) Configuration
 
@@ -257,6 +344,9 @@ midi_synthesizer/
 │   ├── usb_midi.c/h            # USB MIDI interface
 │   ├── midi_handler.c/h        # MIDI message processing & SysEx
 │   ├── display_handler.c/h     # OLED display management
+│   ├── button_handler.c/h      # Button debouncing & event handling
+│   ├── menu_handler.c/h        # Menu system with OLED integration
+│   ├── configuration_settings.c/h  # EEPROM configuration management
 │   ├── debug_uart.c/h          # Debug logging
 │   ├── usb_descriptors.c       # USB device descriptors
 │   └── tusb_config.h           # TinyUSB configuration
@@ -266,6 +356,10 @@ midi_synthesizer/
 │   │   ├── drivers/
 │   │   │   ├── pcf857x_driver.c/h  # PCF8574/PCF8575 driver
 │   │   │   └── ch423_driver.c/h    # CH423 driver
+│   │   └── CMakeLists.txt
+│   ├── i2c_memory/             # EEPROM library (AT24Cxx)
+│   │   ├── drivers/
+│   │   │   └── at24cxx_driver.c/h  # AT24C32 EEPROM driver
 │   │   └── CMakeLists.txt
 │   └── oled_display/           # SSD1306 OLED driver
 │       ├── oled_display.c/h
@@ -292,9 +386,28 @@ midi_synthesizer/
 
 ### Display Handler (`display_handler.c/h`)
 - OLED display initialization
-- Text rendering
+- Text rendering (normal and inverted)
 - Note information display
-- Configuration status display
+- Menu rendering with highlighting
+
+### Button Handler (`button_handler.c/h`)
+- GPIO button interface with debouncing
+- Short/long press detection (3-second threshold)
+- Event-based callback system
+- 50ms debounce timing
+
+### Menu Handler (`menu_handler.c/h`)
+- Interactive menu system
+- 7 configuration options
+- Inverted text highlighting for selection
+- Scrolling menu display (3 items visible)
+- Integration with display and MIDI handlers
+
+### Configuration Settings (`configuration_settings.c/h`)
+- EEPROM persistence layer
+- Load/save configuration
+- Factory defaults restoration
+- AT24C32 EEPROM integration
 
 ### I2C MIDI Library (`lib/i2c_midi/`)
 - Multi-driver GPIO expander support
@@ -309,7 +422,14 @@ midi_synthesizer/
 - SSD1306 driver
 - 5x7 font with full ASCII support (32-126)
 - Pixel-level drawing
-- String rendering
+- String rendering (normal and inverted)
+- Inverted text for menu highlighting
+
+### I2C Memory Library (`lib/i2c_memory/`)
+- AT24Cxx EEPROM driver
+- Page-write support
+- Configuration persistence
+- Read/write abstraction
 
 ## Troubleshooting
 
@@ -322,6 +442,17 @@ midi_synthesizer/
 - Verify I2C connections (SDA=GP2, SCL=GP3)
 - Check I2C address (0x3C for most SSD1306 displays)
 - Monitor debug output for initialization errors
+
+### EEPROM Not Responding
+- Check I2C address (0x50 for AT24C32)
+- The synthesizer operates with default settings if EEPROM is not present
+- Verify I2C pull-up resistors (4.7kΩ recommended)
+
+### Button Not Responding
+- Check GPIO 4 connection
+- Button should be active low (connects to ground when pressed)
+- Internal pull-up is enabled in firmware
+- Monitor debug output for button events
 
 ### GPIO Expander Not Responding
 - The synthesizer continues to operate even if the GPIO expander is not connected
@@ -354,6 +485,11 @@ This project is provided as-is for educational and development purposes.
 **V1.0** (Current)
 - USB MIDI to I2C MIDI conversion
 - SSD1306 OLED display support
+- Interactive button-driven menu system
+- Configuration persistence to EEPROM (AT24C32)
+- Inverted text menu highlighting
+- Single-button navigation (short press / 3-second hold)
+- 7 menu options for real-time configuration
 - SysEx configuration system
 - Semitone handling (Play/Ignore/Skip modes)
 - Comprehensive debug output

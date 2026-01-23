@@ -67,4 +67,44 @@ void midi_handler_set_led_enabled(bool enabled);
  */
 void midi_handler_process_message(uint8_t status, uint8_t data1, uint8_t data2);
 
+/**
+ * @brief Get current MIDI channel
+ * 
+ * @return Current MIDI channel (1-16)
+ */
+uint8_t midi_handler_get_channel(void);
+
+/**
+ * @brief Get current semitone mode
+ * 
+ * @return Semitone mode (0=PLAY, 1=IGNORE, 2=SKIP)
+ */
+uint8_t midi_handler_get_semitone_mode(void);
+
+/**
+ * @brief Set semitone mode
+ * 
+ * @param mode Semitone mode (0=PLAY, 1=IGNORE, 2=SKIP)
+ */
+void midi_handler_set_semitone_mode(uint8_t mode);
+
+/**
+ * @brief Send all notes off on all channels
+ */
+void midi_handler_all_notes_off(void);
+
+/**
+ * @brief Save current configuration to EEPROM
+ * 
+ * @return true if successful, false otherwise
+ */
+bool midi_handler_save_config(void);
+
+/**
+ * @brief Reset configuration to factory defaults
+ * 
+ * @return true if successful, false otherwise
+ */
+bool midi_handler_reset_to_defaults(void);
+
 #endif // MIDI_HANDLER_H

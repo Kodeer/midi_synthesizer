@@ -69,6 +69,8 @@ add_executable(midi_synthesizer
     src/display_handler.c
     src/usb_descriptors.c
     src/configuration_settings.c
+    src/button_handler.c
+    src/menu_handler.c
 )
 
 # Add tusb_config.h directory

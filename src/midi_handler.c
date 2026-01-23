@@ -319,9 +319,22 @@ bool midi_handler_init(void* i2c_inst, uint8_t sda_pin, uint8_t scl_pin,
 {
     debug_info("MIDI Handler: Initializing...");
     
-    // Initialize configuration manager with EEPROM
+    // CRITICAL FIX: Initialize I2C bus FIRST before accessing any I2C devices
+    // This prevents system hang when trying to read EEPROM on uninitialized bus
+    i2c_inst_t *i2c_port = (i2c_inst_t*)i2c_inst;
+    i2c_init(i2c_port, i2c_freq);
+    gpio_set_function(sda_pin, GPIO_FUNC_I2C);
+    gpio_set_function(scl_pin, GPIO_FUNC_I2C);
+    gpio_pull_up(sda_pin);
+    gpio_pull_up(scl_pin);
+    debug_info("MIDI Handler: I2C bus initialized at %d Hz", i2c_freq);
+    
+    // Small delay to allow I2C bus to stabilize
+    sleep_ms(10);
+    
+    // Now try to initialize configuration manager with EEPROM
     // Using AT24C32 (4KB) at address 0x50, storing config at address 0x0000
-    if (config_init(&config_mgr, (i2c_inst_t*)i2c_inst, 0x50, 4, 0x0000)) {
+    if (config_init(&config_mgr, i2c_port, 0x50, 4, 0x0000)) {
         config_initialized = true;
         debug_info("MIDI Handler: Configuration loaded from EEPROM");
         
@@ -334,13 +347,14 @@ bool midi_handler_init(void* i2c_inst, uint8_t sda_pin, uint8_t scl_pin,
                       settings->semitone_mode);
             
             // Initialize I2C MIDI with configuration from EEPROM
+            // Note: I2C bus is already initialized, i2c_midi_init_with_config will re-init (harmless)
             i2c_midi_config_t midi_config = {
                 .note_range = settings->note_range,
                 .low_note = settings->low_note,
                 .high_note = settings->low_note + settings->note_range - 1,
                 .midi_channel = settings->midi_channel - 1,  // Convert 1-16 to 0-15
                 .io_address = settings->io_expander_address,
-                .i2c_port = (i2c_inst_t*)i2c_inst,
+                .i2c_port = i2c_port,
                 .io_type = (io_expander_type_t)settings->io_expander_type,
                 .semitone_mode = (i2c_midi_semitone_mode_t)settings->semitone_mode
             };
@@ -356,6 +370,7 @@ bool midi_handler_init(void* i2c_inst, uint8_t sda_pin, uint8_t scl_pin,
         config_initialized = false;
         
         // Fallback to default initialization
+        // Note: I2C bus is already initialized, i2c_midi_init will re-init (harmless)
         if (!i2c_midi_init(&i2c_midi_ctx, i2c_inst, sda_pin, scl_pin, i2c_freq)) {
             debug_error("MIDI Handler: Failed to initialize I2C MIDI");
             return false;
@@ -439,4 +454,83 @@ void midi_handler_set_led_enabled(bool enabled)
 void midi_handler_process_message(uint8_t status, uint8_t data1, uint8_t data2)
 {
     internal_midi_handler(status, data1, data2, NULL);
+}
+
+uint8_t midi_handler_get_channel(void)
+{
+    // Return 1-16 (not 0-15)
+    return i2c_midi_ctx.config.midi_channel + 1;
+}
+
+uint8_t midi_handler_get_semitone_mode(void)
+{
+    return (uint8_t)i2c_midi_ctx.config.semitone_mode;
+}
+
+void midi_handler_set_semitone_mode(uint8_t mode)
+{
+    if (mode > 2) {
+        debug_error("MIDI Handler: Invalid semitone mode %d", mode);
+        return;
+    }
+    
+    i2c_midi_set_semitone_mode(&i2c_midi_ctx, (i2c_midi_semitone_mode_t)mode);
+    
+    const char* mode_names[] = {"PLAY", "IGNORE", "SKIP"};
+    debug_info("MIDI Handler: Semitone mode set to %s", mode_names[mode]);
+}
+
+void midi_handler_all_notes_off(void)
+{
+    // Reset all I2C MIDI pins (turn all notes off)
+    i2c_midi_reset(&i2c_midi_ctx);
+    debug_info("MIDI Handler: All notes off");
+}
+
+bool midi_handler_save_config(void)
+{
+    if (!config_initialized) {
+        debug_error("MIDI Handler: Configuration not initialized, cannot save");
+        return false;
+    }
+    
+    // Update configuration with current settings
+    config_settings_t *settings = config_get_settings(&config_mgr);
+    if (settings) {
+        settings->midi_channel = i2c_midi_ctx.config.midi_channel + 1;  // Convert 0-15 to 1-16
+        settings->low_note = i2c_midi_ctx.config.low_note;
+        settings->note_range = i2c_midi_ctx.config.note_range;
+        settings->semitone_mode = (uint8_t)i2c_midi_ctx.config.semitone_mode;
+        settings->io_expander_address = i2c_midi_ctx.config.io_address;
+        settings->io_expander_type = (uint8_t)i2c_midi_ctx.config.io_type;
+        
+        if (config_save(&config_mgr)) {
+            debug_info("MIDI Handler: Configuration saved to EEPROM");
+            return true;
+        } else {
+            debug_error("MIDI Handler: Failed to save configuration");
+            return false;
+        }
+    }
+    
+    return false;
+}
+
+bool midi_handler_reset_to_defaults(void)
+{
+    if (!config_initialized) {
+        debug_warn("MIDI Handler: Configuration not initialized");
+    }
+    
+    // Load defaults
+    config_load_defaults(&config_mgr);
+    
+    // Save to EEPROM
+    if (config_save(&config_mgr)) {
+        debug_info("MIDI Handler: Configuration reset to defaults and saved");
+        return true;
+    } else {
+        debug_error("MIDI Handler: Failed to save default configuration");
+        return false;
+    }
 }

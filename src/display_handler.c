@@ -57,3 +57,13 @@ void display_handler_writeline(uint8_t x, uint8_t y, const char* text)
     oled_draw_string(x, y, text);
     oled_display();
 }
+
+void display_handler_writeline_inverted(uint8_t x, uint8_t y, const char* text)
+{
+    if (!display_initialized || text == NULL) {
+        return;
+    }
+    
+    oled_draw_string_inverted(x, y, text);
+    oled_display();
+}

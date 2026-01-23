@@ -37,4 +37,13 @@ void display_handler_clear(void);
  */
 void display_handler_writeline(uint8_t x, uint8_t y, const char* text);
 
+/**
+ * @brief Write an inverted text line to the display (white background, black text)
+ * 
+ * @param x X coordinate (0-127)
+ * @param y Y coordinate (0-63)
+ * @param text Text string to display
+ */
+void display_handler_writeline_inverted(uint8_t x, uint8_t y, const char* text);
+
 #endif // DISPLAY_HANDLER_H

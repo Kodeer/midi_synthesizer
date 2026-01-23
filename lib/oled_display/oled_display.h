@@ -64,6 +64,24 @@ void oled_draw_char(uint8_t x, uint8_t y, char c);
 void oled_draw_string(uint8_t x, uint8_t y, const char* str);
 
 /**
+ * @brief Draw an inverted character at specified position (white background, black text)
+ * 
+ * @param x X coordinate
+ * @param y Y coordinate
+ * @param c Character to draw
+ */
+void oled_draw_char_inverted(uint8_t x, uint8_t y, char c);
+
+/**
+ * @brief Draw an inverted string at specified position (white background, black text)
+ * 
+ * @param x X coordinate
+ * @param y Y coordinate
+ * @param str String to draw
+ */
+void oled_draw_string_inverted(uint8_t x, uint8_t y, const char* str);
+
+/**
  * @brief Display MIDI note information
  * 
  * @param notes Array of MIDI note info structures

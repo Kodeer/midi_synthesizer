@@ -5,6 +5,8 @@
 #include "midi_handler.h"
 #include "debug_uart.h"
 #include "display_handler.h"
+#include "button_handler.h"
+#include "menu_handler.h"
 
 //--------------------------------------------------------------------+
 // Hardware Configuration
@@ -33,6 +35,41 @@
 
 // LED Feedback Configuration
 #define LED_PIN             25
+
+// Button Configuration
+#define BUTTON_PIN          4
+#define BUTTON_ACTIVE_LOW   true    // Button pulls to ground when pressed
+
+//--------------------------------------------------------------------+
+// Button Event Handler
+//--------------------------------------------------------------------+
+void handle_button_event(button_event_t event) {
+    switch (event) {
+        case BUTTON_EVENT_SHORT_PRESS:
+            if (menu_is_active()) {
+                // Cycle to next menu option
+                menu_next();
+            }
+            break;
+            
+        case BUTTON_EVENT_LONG_PRESS:
+            if (menu_is_active()) {
+                // Execute current menu option
+                menu_execute();
+            } else {
+                // Enter menu mode
+                menu_enter();
+            }
+            break;
+            
+        case BUTTON_EVENT_RELEASED:
+            // Button released - no action needed
+            break;
+            
+        default:
+            break;
+    }
+}
 
 //--------------------------------------------------------------------+
 // Main Entry Point
@@ -67,6 +104,18 @@ int main()
         debug_error("Failed to initialize Display Handler");
     }
     
+    // Initialize Button Handler
+    if (!button_init(BUTTON_PIN, BUTTON_ACTIVE_LOW)) {
+        debug_error("Failed to initialize Button Handler");
+    } else {
+        button_set_callback(handle_button_event);
+        debug_info("Button handler initialized on GPIO %d", BUTTON_PIN);
+    }
+    
+    // Initialize Menu Handler
+    if (!menu_init()) {
+        debug_error("Failed to initialize Menu Handler");
+    }
 
     // Configure MIDI handler (optional - uses defaults if not called)
     // midi_handler_set_channel(9);  // Channel 10 (0-indexed)
@@ -95,6 +144,9 @@ int main()
    
     // Main loop
     while (true) {
+        // Update button state
+        button_update();
+        
         // Process USB and MIDI tasks
         usb_midi_task();
         
