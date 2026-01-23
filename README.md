@@ -14,9 +14,13 @@ The Zoft Synthesizer receives MIDI messages via USB and outputs them through an 
   - PCF8575 (16-bit, address 0x20)
   - CH423 (16-bit, address 0x24)
 - **OLED Display**: 128x64 SSD1306 display showing:
+  - Single-pixel border around all display content
+  - Centered headings with horizontal divider lines
   - Startup message: "Zoft Synthesizer V1.0"
   - Real-time MIDI note information (note name, velocity, channel)
   - Interactive menu system with inverted text highlighting
+  - Bouncing ball screensaver (3 balls with physics)
+  - 30-second inactivity timeout using hardware timer
 - **Button Interface**: Single button on GPIO 4 for menu navigation:
   - Short press: Cycle through menu options
   - Hold 3 seconds: Enter menu or execute selected option
@@ -148,11 +152,15 @@ The synthesizer features a single button on GPIO 4 for menu navigation:
 When you hold the button for 3 seconds, the menu system activates showing:
 
 ```
-======= MENU =======
-
- 2. Save Config      
-█1. Reset Defaults  █  <- Selected (inverted display)
- 3. MIDI Channel     
+┌──────────────────────────┐
+│         MENU             │
+├──────────────────────────┤
+│                          │
+│  2. Save Config          │
+│ █1. Reset Defaults█      │ <- Selected (inverted)
+│  3. MIDI Channel         │
+│                          │
+└──────────────────────────┘
 ```
 
 The menu provides 7 configuration options:
@@ -389,6 +397,9 @@ midi_synthesizer/
 - Text rendering (normal and inverted)
 - Note information display
 - Menu rendering with highlighting
+- Hardware timer-based inactivity tracking (1-second interval)
+- 30-second timeout before screensaver activation
+- Screensaver management and lifecycle control
 
 ### Button Handler (`button_handler.c/h`)
 - GPIO button interface with debouncing
@@ -421,9 +432,12 @@ midi_synthesizer/
 ### OLED Display Library (`lib/oled_display/`)
 - SSD1306 driver
 - 5x7 font with full ASCII support (32-126)
+- Single-pixel border drawing around display edges
 - Pixel-level drawing
-- String rendering (normal and inverted)
+- String rendering (normal and inverted) with 1-pixel offset from borders
 - Inverted text for menu highlighting
+- Bouncing ball screensaver with gravity and damping physics (3 balls)
+- Centered headings with horizontal divider lines
 
 ### I2C Memory Library (`lib/i2c_memory/`)
 - AT24Cxx EEPROM driver
@@ -484,12 +498,18 @@ This project is provided as-is for educational and development purposes.
 
 **V1.0** (Current)
 - USB MIDI to I2C MIDI conversion
-- SSD1306 OLED display support
+- SSD1306 OLED display support with visual enhancements:
+  - Single-pixel border around all content
+  - Centered headings with horizontal dividers
+  - Text offset to avoid border overlap
+  - Bouncing ball screensaver (3 balls with physics)
 - Interactive button-driven menu system
 - Configuration persistence to EEPROM (AT24C32)
 - Inverted text menu highlighting
 - Single-button navigation (short press / 3-second hold)
 - 7 menu options for real-time configuration
+- Hardware timer-based inactivity detection (30-second timeout)
+- Activity tracking for MIDI messages and button presses
 - SysEx configuration system
 - Semitone handling (Play/Ignore/Skip modes)
 - Comprehensive debug output

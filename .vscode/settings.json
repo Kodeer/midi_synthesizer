@@ -52,6 +52,7 @@
         "Get-Item": true,
         "ForEach-Object": true,
         "mv": true,
-        "&": true
+        "&": true,
+        "arm-none-eabi-size": true
     }
 }

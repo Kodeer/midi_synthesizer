@@ -22,6 +22,7 @@ static button_callback_t button_callback = NULL;
 static uint32_t button_press_time = 0;
 static uint32_t button_release_time = 0;
 static bool button_hold_triggered = false;
+static uint64_t last_activity_time = 0;
 
 //--------------------------------------------------------------------+
 // Button Handler Implementation
@@ -74,6 +75,14 @@ uint32_t button_get_hold_time(void) {
     return 0;
 }
 
+uint64_t button_get_last_activity_time(void) {
+    return last_activity_time;
+}
+
+void button_init_activity_time(void) {
+    last_activity_time = time_us_64() / 1000;
+}
+
 button_event_t button_update(void) {
     if (button_pin == 0xFF) {
         return BUTTON_EVENT_NONE;
@@ -90,6 +99,15 @@ button_event_t button_update(void) {
                 button_press_time = current_time;
                 button_state = BUTTON_STATE_PRESSED;
                 button_hold_triggered = false;
+                last_activity_time = time_us_64() / 1000;
+                
+                // Stop screensaver if active
+                extern bool display_handler_is_screensaver_active(void);
+                extern void display_handler_screensaver_stop(void);
+                if (display_handler_is_screensaver_active()) {
+                    display_handler_screensaver_stop();
+                }
+                
                 debug_info("BUTTON: Pressed");
             }
             break;
@@ -99,6 +117,7 @@ button_event_t button_update(void) {
                 // Button released quickly - short press
                 uint32_t press_duration = current_time - button_press_time;
                 if (press_duration >= BUTTON_DEBOUNCE_MS) {
+                    last_activity_time = time_us_64() / 1000;
                     event = BUTTON_EVENT_SHORT_PRESS;
                     debug_info("BUTTON: Short press (%d ms)", press_duration);
                 }

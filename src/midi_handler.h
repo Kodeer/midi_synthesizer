@@ -107,4 +107,16 @@ bool midi_handler_save_config(void);
  */
 bool midi_handler_reset_to_defaults(void);
 
+/**
+ * @brief Get timestamp of last received MIDI note
+ * 
+ * @return Timestamp in milliseconds (from time_us_64() / 1000)
+ */
+uint64_t midi_handler_get_last_note_time(void);
+
+/**
+ * @brief Initialize MIDI activity timestamp to current time
+ */
+void midi_handler_init_activity_time(void);
+
 #endif // MIDI_HANDLER_H

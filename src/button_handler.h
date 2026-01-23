@@ -59,4 +59,15 @@ bool button_is_pressed(void);
  */
 uint32_t button_get_hold_time(void);
 
+/**
+ * Get timestamp of last button activity (press or release)
+ * @return Timestamp in milliseconds
+ */
+uint64_t button_get_last_activity_time(void);
+
+/**
+ * Initialize activity timestamp to current time
+ */
+void button_init_activity_time(void);
+
 #endif // BUTTON_HANDLER_H

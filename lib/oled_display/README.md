@@ -6,6 +6,15 @@ A library for controlling a 128x64 SSD1306-based OLED display over I2C to show M
 
 - **SSD1306 Driver**: Full support for 128x64 OLED displays
 - **I2C Communication**: Uses I2C address 0x3C (0x78 >> 1)
+- **Visual Enhancements**:
+  - Single-pixel border around display edges
+  - Centered headings with horizontal divider lines
+  - Text rendering with 1-pixel offset to avoid border overlap
+- **Screensaver**:
+  - Bouncing ball animation (3 balls)
+  - Gravity and damping physics simulation
+  - Collision detection with display boundaries
+  - 30-second inactivity timeout
 - **MIDI Note Display**: Show active MIDI notes with velocity and channel information
 - **Note Name Conversion**: Converts MIDI note numbers to musical note names (C4, D#5, etc.)
 - **Channel Activity Display**: Visual representation of activity across all 16 MIDI channels
@@ -32,6 +41,11 @@ Initialize the OLED display. Pass `i2c0` or `i2c1` as the I2C instance.
 void oled_clear(void);
 ```
 Clear the entire display buffer.
+
+```c
+void oled_draw_border(void);
+```
+Draw a single-pixel border around the display edges (128x64). Automatically called after `oled_clear()` in display handler functions.
 
 ```c
 void oled_display(void);
@@ -72,6 +86,38 @@ Show activity bars for all 16 MIDI channels.
 void oled_note_to_name(uint8_t note, char* name_buffer);
 ```
 Convert MIDI note number (0-127) to note name (e.g., "C4", "A#5").
+
+### Screensaver Functions
+
+```c
+void oled_screensaver_init(void);
+```
+Initialize the screensaver with 3 bouncing balls at random positions with random velocities.
+
+```c
+void oled_screensaver_update(void);
+```
+Update the screensaver animation frame. Call this periodically (e.g., 30-60 FPS) to animate the bouncing balls with gravity and collision physics.
+
+## Implementation Details
+
+### Display Border
+All text is rendered with a 1-pixel y-offset to prevent overlap with the top border. The border drawing function uses `oled_set_pixel()` to draw:
+- Top edge: y=0, x=0-127
+- Bottom edge: y=63, x=0-127  
+- Left edge: x=0, y=0-63
+- Right edge: x=127, y=0-63
+
+### Screensaver Physics
+The bouncing ball screensaver simulates realistic physics:
+- **Gravity**: 0.15 pixels/frame² downward acceleration
+- **Damping**: 0.9 velocity multiplier on wall collisions
+- **Collision Detection**: Reflects velocity on boundary impact
+- **Ball Size**: 3-pixel radius circles
+- **Border Awareness**: Balls stay within the display border (1-126 x, 1-62 y)
+
+### Text Rendering
+All character drawing functions (`oled_draw_char`, `oled_draw_char_inverted`) automatically add 1 pixel to the y-coordinate to ensure proper spacing from the top border.
 
 ## Example Usage
 

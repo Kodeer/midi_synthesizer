@@ -150,6 +150,14 @@ int main()
         // Process USB and MIDI tasks
         usb_midi_task();
         
+        // Check if timer has triggered screensaver timeout
+        display_handler_check_timeout();
+        
+        // Update screensaver if active
+        if (display_handler_is_screensaver_active()) {
+            display_handler_screensaver_update();
+        }
+        
         // Add a small delay to prevent tight loop
         sleep_us(100);
     }

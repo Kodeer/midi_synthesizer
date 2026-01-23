@@ -32,6 +32,11 @@ bool oled_init(void* i2c_inst);
 void oled_clear(void);
 
 /**
+ * @brief Draw a single pixel border around the display
+ */
+void oled_draw_border(void);
+
+/**
  * @brief Update the display with buffered content
  */
 void oled_display(void);
@@ -112,5 +117,16 @@ void oled_display_channel_activity(const uint8_t* channel_activity);
  * @param name_buffer Buffer to store note name (minimum 4 bytes)
  */
 void oled_note_to_name(uint8_t note, char* name_buffer);
+
+/**
+ * @brief Initialize the screensaver
+ */
+void oled_screensaver_init(void);
+
+/**
+ * @brief Update and display the screensaver animation
+ * Call this repeatedly to animate the screensaver
+ */
+void oled_screensaver_update(void);
 
 #endif // OLED_DISPLAY_H

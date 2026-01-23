@@ -179,14 +179,9 @@ bool i2c_midi_init(i2c_midi_t *ctx, i2c_inst_t *i2c_port, uint sda_pin, uint scl
                ctx->config.midi_channel, ctx->config.low_note, ctx->config.high_note, 
                io_str, ctx->config.io_address, mode_str);
 
-    // Initialize I2C
-    i2c_init(i2c_port, baudrate);
-    gpio_set_function(sda_pin, GPIO_FUNC_I2C);
-    gpio_set_function(scl_pin, GPIO_FUNC_I2C);
-    gpio_pull_up(sda_pin);
-    gpio_pull_up(scl_pin);
-    
-    debug_info("I2C_MIDI: I2C initialized at %d Hz", baudrate);
+    // NOTE: I2C bus should already be initialized by the caller (e.g., midi_handler_init)
+    // We do NOT re-initialize it here to avoid bus conflicts
+    debug_info("I2C_MIDI: Using pre-initialized I2C bus (assumed %d Hz)", baudrate);
 
     // Initialize IO expander driver
     switch (ctx->config.io_type) {
@@ -228,23 +223,24 @@ bool i2c_midi_init_with_config(i2c_midi_t *ctx, i2c_midi_config_t *config, uint 
     ctx->config.high_note = calculate_high_note(ctx->config.low_note, ctx->config.note_range, ctx->config.semitone_mode);
     ctx->pin_state = 0x00;
 
-    // Initialize I2C
-    i2c_init(config->i2c_port, baudrate);
-    gpio_set_function(sda_pin, GPIO_FUNC_I2C);
-    gpio_set_function(scl_pin, GPIO_FUNC_I2C);
-    gpio_pull_up(sda_pin);
-    gpio_pull_up(scl_pin);
+    // NOTE: I2C bus should already be initialized by the caller (e.g., midi_handler_init)
+    // We do NOT re-initialize it here to avoid bus conflicts
+    debug_info("I2C_MIDI: Using pre-initialized I2C bus (assumed %d Hz)", baudrate);
 
     // Initialize IO expander driver
     switch (ctx->config.io_type) {
 #ifdef USE_PCF857X_DRIVER
         case IO_EXPANDER_PCF8574:
-            pcf857x_init(&ctx->driver.pcf857x, config->i2c_port, ctx->config.io_address, PCF8574_CHIP);
+            if (!pcf857x_init(&ctx->driver.pcf857x, config->i2c_port, ctx->config.io_address, PCF8574_CHIP)) {
+                debug_error("I2C_MIDI: PCF857x initialization failed");
+            }
             break;
 #endif
 #ifdef USE_CH423_DRIVER
         case IO_EXPANDER_CH423:
-            ch423_init(&ctx->driver.ch423, config->i2c_port, ctx->config.io_address);
+            if (!ch423_init(&ctx->driver.ch423, config->i2c_port, ctx->config.io_address)) {
+                debug_error("I2C_MIDI: CH423 initialization failed");
+            }
             break;
 #endif
         default:

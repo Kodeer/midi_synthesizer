@@ -3,6 +3,7 @@
 #include "midi_handler.h"
 #include "configuration_settings.h"
 #include "debug_uart.h"
+#include "oled_display.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -44,6 +45,11 @@ void menu_enter(void) {
         return;  // Already in menu
     }
     
+    // Stop screensaver if active
+    if (display_handler_is_screensaver_active()) {
+        display_handler_screensaver_stop();
+    }
+    
     menu_active = true;
     current_option = MENU_OPTION_RESET_DEFAULTS;
     
@@ -62,9 +68,8 @@ void menu_exit(void) {
     
     debug_info("MENU: Exited menu mode");
     
-    // Clear display and show normal status
-    display_handler_clear();
-    display_handler_writeline(5, 20, "Zoft Synthesizer V1");
+    // Clear display and show home screen
+    display_handler_show_home();
 }
 
 void menu_next(void) {
@@ -193,9 +198,16 @@ void menu_update_display(void) {
     // Clear the display first
     display_handler_clear();
     
-    // Display menu title - centered with equals padding
-    // Display width: 128 pixels / 6 pixels per char = ~21 chars
-    display_handler_writeline(0, 0, "======= MENU =======");
+    // Display menu title - centered
+    // "MENU" is 4 chars * 6 pixels = 24 pixels, center at (128-24)/2 = 52
+    display_handler_writeline(52, 1, "MENU");
+    
+    // Draw horizontal line below heading
+    // Position: 1 (top border) + 1 (offset) + 8 (text height) + 1 (space) = 11 pixels from top
+    for (uint8_t x = 1; x < 127; x++) {
+        oled_set_pixel(x, 11, 1);
+    }
+    oled_display();
     
     // Display current menu option with selection indicator
     char line[32];

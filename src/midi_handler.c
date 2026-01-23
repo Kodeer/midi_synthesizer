@@ -22,6 +22,9 @@ static i2c_midi_t i2c_midi_ctx;
 static uint8_t led_gpio_pin = 0xFF; // 0xFF = disabled
 static bool led_enabled = true;
 
+// Last MIDI activity timestamp (for timeout detection)
+static uint64_t last_activity_time = 0;
+
 // SysEx message handling
 #define SYSEX_BUFFER_SIZE 32
 #define SYSEX_MANUFACTURER_ID 0x7D  // Educational/development use
@@ -256,6 +259,9 @@ static void internal_midi_handler(uint8_t status, uint8_t data1, uint8_t data2, 
 {
     (void)user_data; // Unused parameter
     
+    // Update activity timestamp for any MIDI message
+    last_activity_time = time_us_64() / 1000;
+    
     // Handle SysEx messages
     if (status == 0xF0) { // SysEx Start
         sysex_receiving = true;
@@ -347,7 +353,7 @@ bool midi_handler_init(void* i2c_inst, uint8_t sda_pin, uint8_t scl_pin,
                       settings->semitone_mode);
             
             // Initialize I2C MIDI with configuration from EEPROM
-            // Note: I2C bus is already initialized, i2c_midi_init_with_config will re-init (harmless)
+            // Note: I2C bus is already initialized above
             i2c_midi_config_t midi_config = {
                 .note_range = settings->note_range,
                 .low_note = settings->low_note,
@@ -370,7 +376,7 @@ bool midi_handler_init(void* i2c_inst, uint8_t sda_pin, uint8_t scl_pin,
         config_initialized = false;
         
         // Fallback to default initialization
-        // Note: I2C bus is already initialized, i2c_midi_init will re-init (harmless)
+        // Note: I2C bus is already initialized above
         if (!i2c_midi_init(&i2c_midi_ctx, i2c_inst, sda_pin, scl_pin, i2c_freq)) {
             debug_error("MIDI Handler: Failed to initialize I2C MIDI");
             return false;
@@ -402,6 +408,16 @@ bool midi_handler_init(void* i2c_inst, uint8_t sda_pin, uint8_t scl_pin,
 void* midi_handler_get_callback(void)
 {
     return (void*)internal_midi_handler;
+}
+
+uint64_t midi_handler_get_last_note_time(void)
+{
+    return last_activity_time;
+}
+
+void midi_handler_init_activity_time(void)
+{
+    last_activity_time = time_us_64() / 1000;
 }
 
 bool midi_handler_set_channel(uint8_t channel)

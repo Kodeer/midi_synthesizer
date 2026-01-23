@@ -186,6 +186,20 @@ void oled_clear(void) {
     memset(oled_buffer, 0, sizeof(oled_buffer));
 }
 
+void oled_draw_border(void) {
+    // Draw top and bottom borders
+    for (uint8_t x = 0; x < OLED_WIDTH; x++) {
+        oled_set_pixel(x, 0, 1);                    // Top border
+        oled_set_pixel(x, OLED_HEIGHT - 1, 1);      // Bottom border
+    }
+    
+    // Draw left and right borders
+    for (uint8_t y = 0; y < OLED_HEIGHT; y++) {
+        oled_set_pixel(0, y, 1);                    // Left border
+        oled_set_pixel(OLED_WIDTH - 1, y, 1);       // Right border
+    }
+}
+
 void oled_display(void) {
     oled_send_command(SSD1306_COLUMNADDR);
     oled_send_command(0);
@@ -220,7 +234,7 @@ void oled_draw_char(uint8_t x, uint8_t y, char c) {
         uint8_t line = glyph[i];
         for (int j = 0; j < 8; j++) {
             if (line & (1 << j)) {
-                oled_set_pixel(x + i, y + j, 1);
+                oled_set_pixel(x + i, y + j + 1, 1);
             }
         }
     }
@@ -234,7 +248,7 @@ void oled_draw_char_inverted(uint8_t x, uint8_t y, char c) {
     // Draw background box (6x8 pixels for 5x7 font with spacing)
     for (int i = 0; i < 6; i++) {
         for (int j = 0; j < 8; j++) {
-            oled_set_pixel(x + i, y + j, 1);
+            oled_set_pixel(x + i, y + j + 1, 1);
         }
     }
     
@@ -243,7 +257,7 @@ void oled_draw_char_inverted(uint8_t x, uint8_t y, char c) {
         uint8_t line = glyph[i];
         for (int j = 0; j < 8; j++) {
             if (line & (1 << j)) {
-                oled_set_pixel(x + i, y + j, 0);
+                oled_set_pixel(x + i, y + j + 1, 0);
             }
         }
     }
@@ -282,22 +296,30 @@ void oled_display_single_note(uint8_t note_num, uint8_t velocity, uint8_t channe
     char buffer[32];
     
     oled_clear();
+    oled_draw_border();
     
-    // Title
-    oled_draw_string(30, 0, "MIDI NOTE");
+    // Title - centered
+    // "MIDI NOTE" is 9 chars * 6 pixels = 54 pixels, center at (128-54)/2 = 37
+    oled_draw_string(37, 1, "MIDI NOTE");
+    
+    // Draw horizontal line below heading
+    // Position: 1 (top border) + 1 (offset) + 8 (text height) + 1 (space) = 11 pixels from top
+    for (uint8_t x = 1; x < 127; x++) {
+        oled_set_pixel(x, 11, 1);
+    }
     
     // Note name
     char note_name[8];
     oled_note_to_name(note_num, note_name);
-    sprintf(buffer, "Note: %s (%d)", note_name, note_num);
+    sprintf(buffer, " Note: %s (%d)", note_name, note_num);
     oled_draw_string(0, 16, buffer);
     
     // Velocity
-    sprintf(buffer, "Vel: %d", velocity);
+    sprintf(buffer, " Vel: %d", velocity);
     oled_draw_string(0, 28, buffer);
     
     // Channel
-    sprintf(buffer, "Ch: %d", channel + 1);
+    sprintf(buffer, " Ch: %d", channel + 1);
     oled_draw_string(0, 40, buffer);
     
     // Velocity bar
@@ -313,6 +335,7 @@ void oled_display_single_note(uint8_t note_num, uint8_t velocity, uint8_t channe
 
 void oled_display_midi_notes(const midi_note_info_t* notes, uint8_t num_notes) {
     oled_clear();
+    oled_draw_border();
     
     // Header
     oled_draw_string(20, 0, "ACTIVE NOTES");
@@ -343,6 +366,7 @@ void oled_display_midi_notes(const midi_note_info_t* notes, uint8_t num_notes) {
 
 void oled_display_channel_activity(const uint8_t* channel_activity) {
     oled_clear();
+    oled_draw_border();
     
     // Header
     oled_draw_string(10, 0, "CHANNEL ACTIVITY");
@@ -366,5 +390,128 @@ void oled_display_channel_activity(const uint8_t* channel_activity) {
         }
     }
     
+    oled_display();
+}
+
+//--------------------------------------------------------------------+
+// Screensaver Implementation - Bouncing Balls
+//--------------------------------------------------------------------+
+
+#define SCREENSAVER_NUM_BALLS 3
+#define BALL_RADIUS 3
+#define GRAVITY 8       // Gravity acceleration (fixed point 8.8)
+#define DAMPING 230     // Velocity damping on bounce (out of 256)
+
+typedef struct {
+    int16_t x;      // Position X (fixed point 8.8)
+    int16_t y;      // Position Y (fixed point 8.8)
+    int16_t vx;     // Velocity X (fixed point 8.8)
+    int16_t vy;     // Velocity Y (fixed point 8.8)
+    uint8_t size;   // Ball size/radius
+} ball_t;
+
+static ball_t balls[SCREENSAVER_NUM_BALLS];
+static uint32_t screensaver_frame = 0;
+
+// Simple pseudo-random number generator
+static uint32_t screensaver_seed = 12345;
+
+static uint32_t screensaver_rand(void) {
+    screensaver_seed = (screensaver_seed * 1103515245 + 12345) & 0x7FFFFFFF;
+    return screensaver_seed;
+}
+
+// Draw a filled circle
+static void draw_filled_circle(int16_t cx, int16_t cy, uint8_t radius) {
+    for (int16_t y = -radius; y <= radius; y++) {
+        for (int16_t x = -radius; x <= radius; x++) {
+            if (x*x + y*y <= radius*radius) {
+                int16_t px = cx + x;
+                int16_t py = cy + y;
+                if (px >= 0 && px < OLED_WIDTH && py >= 0 && py < OLED_HEIGHT) {
+                    oled_set_pixel(px, py, 1);
+                }
+            }
+        }
+    }
+}
+
+void oled_screensaver_init(void) {
+    // Initialize balls at random positions with random velocities
+    for (uint8_t i = 0; i < SCREENSAVER_NUM_BALLS; i++) {
+        // Random starting position (fixed point 8.8)
+        balls[i].x = ((screensaver_rand() % (OLED_WIDTH - 20)) + 10) << 8;
+        balls[i].y = ((screensaver_rand() % (OLED_HEIGHT - 20)) + 10) << 8;
+        
+        // Random horizontal velocity
+        balls[i].vx = (screensaver_rand() % 512) - 256;
+        
+        // Random initial vertical velocity (upward or small downward)
+        balls[i].vy = -((screensaver_rand() % 384) + 128);
+        
+        // Random size between 2-4 pixels
+        balls[i].size = 2 + (screensaver_rand() % 3);
+    }
+    
+    screensaver_frame = 0;
+}
+
+void oled_screensaver_update(void) {
+    // Clear display
+    oled_clear();
+    
+    // Update and draw each ball
+    for (uint8_t i = 0; i < SCREENSAVER_NUM_BALLS; i++) {
+        // Apply gravity
+        balls[i].vy += GRAVITY;
+        
+        // Update position
+        balls[i].x += balls[i].vx;
+        balls[i].y += balls[i].vy;
+        
+        // Convert from fixed point to integer for collision detection
+        int16_t px = balls[i].x >> 8;
+        int16_t py = balls[i].y >> 8;
+        
+        // Bounce off left/right walls
+        if (px - balls[i].size < 0) {
+            balls[i].x = balls[i].size << 8;
+            balls[i].vx = -balls[i].vx;
+            balls[i].vx = (balls[i].vx * DAMPING) >> 8;
+        } else if (px + balls[i].size >= OLED_WIDTH) {
+            balls[i].x = (OLED_WIDTH - balls[i].size - 1) << 8;
+            balls[i].vx = -balls[i].vx;
+            balls[i].vx = (balls[i].vx * DAMPING) >> 8;
+        }
+        
+        // Bounce off top wall
+        if (py - balls[i].size < 0) {
+            balls[i].y = balls[i].size << 8;
+            balls[i].vy = -balls[i].vy;
+            balls[i].vy = (balls[i].vy * DAMPING) >> 8;
+        }
+        
+        // Bounce off bottom wall
+        if (py + balls[i].size >= OLED_HEIGHT) {
+            balls[i].y = (OLED_HEIGHT - balls[i].size - 1) << 8;
+            balls[i].vy = -balls[i].vy;
+            balls[i].vy = (balls[i].vy * DAMPING) >> 8;
+            
+            // Add some energy back if moving too slow
+            if (balls[i].vy > -50 && balls[i].vy < 50) {
+                balls[i].vy = -200 - (screensaver_rand() % 200);
+            }
+        }
+        
+        // Slight horizontal damping
+        balls[i].vx = (balls[i].vx * 252) >> 8;
+        
+        // Draw the ball
+        px = balls[i].x >> 8;
+        py = balls[i].y >> 8;
+        draw_filled_circle(px, py, balls[i].size);
+    }
+    
+    screensaver_frame++;
     oled_display();
 }
