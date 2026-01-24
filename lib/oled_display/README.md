@@ -11,9 +11,9 @@ A library for controlling a 128x64 SSD1306-based OLED display over I2C to show M
   - Centered headings with horizontal divider lines
   - Text rendering with 1-pixel offset to avoid border overlap
 - **Screensaver**:
-  - Bouncing ball animation (3 balls)
-  - Gravity and damping physics simulation
-  - Collision detection with display boundaries
+  - Lissajous curve animation
+  - Mathematical parametric curves (x = A·sin(a·t + δ), y = B·sin(b·t))
+  - Auto-varying patterns with aesthetic frequency ratios
   - 30-second inactivity timeout
 - **MIDI Note Display**: Show active MIDI notes with velocity and channel information
 - **Note Name Conversion**: Converts MIDI note numbers to musical note names (C4, D#5, etc.)
@@ -90,14 +90,19 @@ Convert MIDI note number (0-127) to note name (e.g., "C4", "A#5").
 ### Screensaver Functions
 
 ```c
-void oled_screensaver_init(void);
+void lissajous_screensaver_init(void);
 ```
-Initialize the screensaver with 3 bouncing balls at random positions with random velocities.
+Initialize the Lissajous curve screensaver with random parameters (amplitudes, frequencies, and phase shift).
 
 ```c
-void oled_screensaver_update(void);
+void lissajous_screensaver_update(void);
 ```
-Update the screensaver animation frame. Call this periodically (e.g., 30-60 FPS) to animate the bouncing balls with gravity and collision physics.
+Update the screensaver animation frame. Call this periodically (e.g., ~60 FPS) to animate the Lissajous curves. Parameters automatically change for variety.
+
+```c
+void lissajous_get_params(float* a_freq, float* b_freq, float* phase);
+```
+Get current screensaver parameters for debugging (optional).
 
 ## Implementation Details
 
@@ -108,13 +113,14 @@ All text is rendered with a 1-pixel y-offset to prevent overlap with the top bor
 - Left edge: x=0, y=0-63
 - Right edge: x=127, y=0-63
 
-### Screensaver Physics
-The bouncing ball screensaver simulates realistic physics:
-- **Gravity**: 0.15 pixels/frame² downward acceleration
-- **Damping**: 0.9 velocity multiplier on wall collisions
-- **Collision Detection**: Reflects velocity on boundary impact
-- **Ball Size**: 3-pixel radius circles
-- **Border Awareness**: Balls stay within the display border (1-126 x, 1-62 y)
+### Screensaver Mathematics
+The Lissajous curve screensaver draws parametric curves:
+- **Equations**: x(t) = A·sin(a·t + δ), y(t) = B·sin(b·t)
+- **Amplitudes**: A = 20-50 pixels (X), B = 12-26 pixels (Y)
+- **Frequencies**: Aesthetic ratios (1:1, 1:2, 2:3, 3:4, 3:5, 4:5) with ±20% variation
+- **Phase Shift**: Random δ from 0 to 2π for pattern variety
+- **Points per Frame**: 500 with line interpolation for smooth curves
+- **Auto-Refresh**: Parameters change randomly (~0.5% chance per frame)
 
 ### Text Rendering
 All character drawing functions (`oled_draw_char`, `oled_draw_char_inverted`) automatically add 1 pixel to the y-coordinate to ensure proper spacing from the top border.
@@ -123,6 +129,7 @@ All character drawing functions (`oled_draw_char`, `oled_draw_char_inverted`) au
 
 ```c
 #include "oled_display.h"
+#include "lissajous_screensaver.h"
 #include "hardware/i2c.h"
 
 int main() {
@@ -146,6 +153,13 @@ int main() {
         {67, 85, 0, true}     // G4
     };
     oled_display_midi_notes(notes, 3);
+    
+    // Screensaver usage
+    lissajous_screensaver_init();
+    while (screensaver_active) {
+        lissajous_screensaver_update();
+        sleep_ms(16);  // ~60 FPS
+    }
     
     return 0;
 }
