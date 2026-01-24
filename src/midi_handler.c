@@ -428,7 +428,8 @@ bool midi_handler_set_channel(uint8_t channel)
     }
     
     // Update the i2c_midi context configuration
-    i2c_midi_ctx.config.midi_channel = channel;
+    // I2C MIDI layer expects 1-based channel (1-16), not 0-based (0-15)
+    i2c_midi_ctx.config.midi_channel = (channel == 0xFF) ? 0xFF : (channel + 1);
     
     if (channel == 0xFF) {
         debug_info("MIDI Handler: Listening to all channels");

@@ -269,7 +269,8 @@ bool i2c_midi_process_message(i2c_midi_t *ctx, uint8_t status, uint8_t note, uin
 
     // Check if message is for our channel
     if (channel != ctx->config.midi_channel) {
-        debug_printf("I2C_MIDI: Ignored - wrong channel (msg ch:%d, expected:%d)\n", channel, ctx->config.midi_channel);
+        // Debug output disabled for performance (causes stuttering)
+        // debug_printf("I2C_MIDI: Ignored - wrong channel (msg ch:%d, expected:%d)\n", channel, ctx->config.midi_channel);
         return false;
     }
 
@@ -277,17 +278,20 @@ bool i2c_midi_process_message(i2c_midi_t *ctx, uint8_t status, uint8_t note, uin
     uint8_t original_note = note;
     if (is_semitone(note)) {
         if (ctx->config.semitone_mode == I2C_MIDI_SEMITONE_IGNORE) {
-            debug_printf("I2C_MIDI: Ignored - semitone note %d (mode: IGNORE)\n", note);
+            // Debug output disabled for performance (causes stuttering)
+            // debug_printf("I2C_MIDI: Ignored - semitone note %d (mode: IGNORE)\n", note);
             return false;
         } else if (ctx->config.semitone_mode == I2C_MIDI_SEMITONE_SKIP) {
             note = map_note_for_mode(note, ctx->config.semitone_mode);
-            debug_info("I2C_MIDI: Semitone %d mapped to %d (mode: SKIP)", original_note, note);
+            // Debug output disabled for performance (causes stuttering)
+            // debug_info("I2C_MIDI: Semitone %d mapped to %d (mode: SKIP)", original_note, note);
         }
     }
 
     // Check if note is in our range
     if (note < ctx->config.low_note || note > ctx->config.high_note) {
-        debug_printf("I2C_MIDI: Ignored - note %d out of range (%d-%d)\n", note, ctx->config.low_note, ctx->config.high_note);
+        // Debug output disabled for performance (causes stuttering)
+        // debug_printf("I2C_MIDI: Ignored - note %d out of range (%d-%d)\n", note, ctx->config.low_note, ctx->config.high_note);
         return false;
     }
 
@@ -317,10 +321,12 @@ bool i2c_midi_process_message(i2c_midi_t *ctx, uint8_t status, uint8_t note, uin
     
     if (message_type == MIDI_NOTE_ON && velocity > 0) {
         note_on = true;
-        debug_info("I2C_MIDI: Note ON - Note:%d -> Pin:%d, Vel:%d", note, pin, velocity);
+        // Debug output disabled for performance (causes stuttering)
+        // debug_info("I2C_MIDI: Note ON - Note:%d -> Pin:%d, Vel:%d", note, pin, velocity);
     } else if (message_type == MIDI_NOTE_OFF || (message_type == MIDI_NOTE_ON && velocity == 0)) {
         note_on = false;
-        debug_info("I2C_MIDI: Note OFF - Note:%d -> Pin:%d", note, pin);
+        // Debug output disabled for performance (causes stuttering)
+        // debug_info("I2C_MIDI: Note OFF - Note:%d -> Pin:%d", note, pin);
     } else {
         debug_printf("I2C_MIDI: Ignored - not a note message (type:0x%02X)\n", message_type);
         return false; // Not a note message we care about

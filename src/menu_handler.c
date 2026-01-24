@@ -14,6 +14,8 @@
 
 static bool menu_active = false;
 static menu_option_t current_option = MENU_OPTION_RESET_DEFAULTS;
+static bool channel_selection_active = false;
+static uint8_t selected_channel = 1;
 
 // Menu option names
 static const char* menu_names[MENU_OPTION_COUNT] = {
@@ -78,6 +80,24 @@ void menu_next(void) {
         return;
     }
     
+    // If in channel selection mode, increment channel number
+    if (channel_selection_active) {
+        selected_channel++;
+        if (selected_channel > 16) {
+            selected_channel = 1;
+        }
+        
+        // Update display with new channel
+        char msg[32];
+        display_handler_clear();
+        snprintf(msg, sizeof(msg), "Channel: %d", selected_channel);
+        display_handler_writeline(30, 28, msg);
+        oled_display();
+        
+        debug_info("MENU: Channel selection: %d", selected_channel);
+        return;
+    }
+    
     // Move to next option
     current_option = (current_option + 1) % MENU_OPTION_COUNT;
     
@@ -89,6 +109,26 @@ void menu_next(void) {
 
 void menu_execute(void) {
     if (!menu_active) {
+        return;
+    }
+    
+    // If in channel selection mode, confirm and exit
+    if (channel_selection_active) {
+        // Convert 1-based display channel to 0-based for MIDI handler
+        midi_handler_set_channel(selected_channel - 1);
+        
+        display_handler_clear();
+        char msg[32];
+        snprintf(msg, sizeof(msg), "Channel %d Set!", selected_channel);
+        display_handler_writeline(5, 28, msg);
+        buzzer_success();  // Play success sound
+        debug_info("MENU: MIDI channel set to %d", selected_channel);
+        
+        sleep_ms(1500);
+        
+        // Exit channel selection mode and return to menu
+        channel_selection_active = false;
+        menu_update_display();
         return;
     }
     
@@ -131,19 +171,17 @@ void menu_execute(void) {
             break;
             
         case MENU_OPTION_MIDI_CHANNEL:
-            // Cycle MIDI channel
-            {
-                uint8_t channel = midi_handler_get_channel() + 1;
-                if (channel > 16) channel = 1;
-                midi_handler_set_channel(channel);
-                
-                snprintf(msg, sizeof(msg), "Channel: %d", channel);
-                display_handler_clear();
-                display_handler_writeline(5, 28, msg);
-                debug_info("MENU: MIDI channel set to %d", channel);
-            }
-            sleep_ms(1500);
-            menu_update_display();
+            // Enter channel selection mode
+            channel_selection_active = true;
+            selected_channel = midi_handler_get_channel();
+            
+            // Display channel selection screen
+            display_handler_clear();
+            snprintf(msg, sizeof(msg), "Channel: %d", selected_channel);
+            display_handler_writeline(30, 28, msg);
+            oled_display();
+            
+            debug_info("MENU: Entered channel selection mode (current: %d)", selected_channel);
             break;
             
         case MENU_OPTION_NOTE_RANGE:
