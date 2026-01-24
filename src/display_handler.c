@@ -1,5 +1,6 @@
 #include "display_handler.h"
 #include "../lib/oled_display/oled_display.h"
+#include "../lib/oled_display/lissajous_screensaver.h"
 #include "debug_uart.h"
 #include "pico/time.h"
 #include "button_handler.h"
@@ -155,7 +156,7 @@ void display_handler_screensaver_start(void)
     
     screensaver_active = true;
     is_home_screen = false;
-    oled_screensaver_init();
+    lissajous_screensaver_init();
 }
 
 void display_handler_screensaver_stop(void)
@@ -176,7 +177,7 @@ void display_handler_screensaver_update(void)
         return;
     }
     
-    oled_screensaver_update();
+    lissajous_screensaver_update();
 }
 
 bool display_handler_is_screensaver_active(void)
@@ -190,7 +191,7 @@ void display_handler_check_timeout(void)
         screensaver_pending = false;
         screensaver_active = true;
         is_home_screen = false;
-        oled_screensaver_init();
+        lissajous_screensaver_init();
         debug_info("Display: Screensaver started by timer");
     }
 }
