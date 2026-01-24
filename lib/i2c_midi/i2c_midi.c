@@ -187,7 +187,7 @@ bool i2c_midi_init(i2c_midi_t *ctx, i2c_inst_t *i2c_port, uint sda_pin, uint scl
     switch (ctx->config.io_type) {
 #ifdef USE_PCF857X_DRIVER
         case IO_EXPANDER_PCF8574:
-            if (!pcf857x_init(&ctx->driver.pcf857x, i2c_port, ctx->config.io_address, PCF8574_CHIP)) {
+            if (!pcf857x_init(&ctx->driver.pcf857x, i2c_port, ctx->config.io_address, PCF8575_CHIP)) {
                 debug_error("I2C_MIDI: PCF857x initialization failed");
             }
             break;
@@ -231,7 +231,7 @@ bool i2c_midi_init_with_config(i2c_midi_t *ctx, i2c_midi_config_t *config, uint 
     switch (ctx->config.io_type) {
 #ifdef USE_PCF857X_DRIVER
         case IO_EXPANDER_PCF8574:
-            if (!pcf857x_init(&ctx->driver.pcf857x, config->i2c_port, ctx->config.io_address, PCF8574_CHIP)) {
+            if (!pcf857x_init(&ctx->driver.pcf857x, config->i2c_port, ctx->config.io_address, PCF8575_CHIP)) {
                 debug_error("I2C_MIDI: PCF857x initialization failed");
             }
             break;

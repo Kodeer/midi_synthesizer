@@ -35,6 +35,11 @@ The Zoft Synthesizer receives MIDI messages via USB and outputs them through an 
 - **Configuration Storage**: EEPROM persistence (AT24C32, address 0x50)
 - **Debug Output**: Comprehensive UART logging at 115200 baud
 - **LED Feedback**: Visual indication of MIDI note activity
+- **PWM Buzzer**: Audible feedback with sound effects:
+  - Boot-up melody (C5, E5, G5, C6 sequence)
+  - Button click sounds
+  - Success/error confirmation tones
+  - Programmable tone generation
 - **Configurable via SysEx**:
   - Note range filtering
   - MIDI channel selection
@@ -63,6 +68,12 @@ The Zoft Synthesizer receives MIDI messages via USB and outputs them through an 
 - GPIO: GP4
 - Function: Menu navigation and configuration
 - Active: Low (internal pull-up enabled)
+
+### PWM Buzzer
+- GPIO: GP15
+- Type: Passive piezo buzzer
+- Connection: GPIO 15 → [100Ω resistor] → Piezo+ | Piezo- → GND
+- Function: Audible feedback for system events
 
 ### Debug UART
 - TX: GP0
@@ -369,8 +380,11 @@ midi_synthesizer/
 │   │   ├── drivers/
 │   │   │   └── at24cxx_driver.c/h  # AT24C32 EEPROM driver
 │   │   └── CMakeLists.txt
-│   └── oled_display/           # SSD1306 OLED driver
-│       ├── oled_display.c/h
+│   ├── oled_display/           # SSD1306 OLED driver
+│   │   ├── oled_display.c/h
+│   │   └── CMakeLists.txt
+│   └── buzzer/                 # PWM buzzer library
+│       ├── buzzer.c/h
 │       └── CMakeLists.txt
 ├── CMakeLists.txt              # Build configuration
 ├── pico_sdk_import.cmake       # Pico SDK import
@@ -445,6 +459,16 @@ midi_synthesizer/
 - Configuration persistence
 - Read/write abstraction
 
+### Buzzer Library (`lib/buzzer/`)
+- PWM-based tone generation
+- Frequency and duration control
+- Pre-defined sound effects:
+  - Boot melody (ascending C5, E5, G5, C6)
+  - Click sound (2kHz, 30ms)
+  - Success sound (ascending tones)
+  - Error sound (two-tone alarm)
+- Supports custom tone generation
+
 ## Troubleshooting
 
 ### USB Device Not Recognized
@@ -490,6 +514,12 @@ midi_synthesizer/
 - Verify baud rate: 115200
 - Ensure DEBUG_ENABLED is set to true
 
+### Buzzer Not Working
+- Verify GPIO 15 connection to piezo buzzer
+- Check 100Ω resistor is in series with buzzer
+- Ensure buzzer polarity is correct (+ to GPIO side)
+- Passive piezo buzzer required (not active buzzer with built-in oscillator)
+
 ## License
 
 This project is provided as-is for educational and development purposes.
@@ -503,6 +533,11 @@ This project is provided as-is for educational and development purposes.
   - Centered headings with horizontal dividers
   - Text offset to avoid border overlap
   - Bouncing ball screensaver (3 balls with physics)
+- PWM buzzer with sound effects:
+  - Boot-up melody
+  - Button click feedback
+  - Success/error confirmation tones
+  - Programmable tone generation
 - Interactive button-driven menu system
 - Configuration persistence to EEPROM (AT24C32)
 - Inverted text menu highlighting

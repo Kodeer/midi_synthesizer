@@ -4,6 +4,7 @@
 #include "configuration_settings.h"
 #include "debug_uart.h"
 #include "oled_display.h"
+#include "buzzer.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -117,10 +118,12 @@ void menu_execute(void) {
             if (midi_handler_save_config()) {
                 display_handler_clear();
                 display_handler_writeline(5, 28, "Config Saved!");
+                buzzer_success();  // Play success sound
                 debug_info("MENU: Configuration saved");
             } else {
                 display_handler_clear();
                 display_handler_writeline(5, 28, "Save Failed!");
+                buzzer_error();  // Play error sound
                 debug_error("MENU: Failed to save configuration");
             }
             sleep_ms(3000);

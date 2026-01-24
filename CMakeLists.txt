@@ -56,6 +56,9 @@ add_subdirectory(lib/oled_display)
 # Add i2c_memory library subdirectory
 add_subdirectory(lib/i2c_memory)
 
+# Add buzzer library subdirectory
+add_subdirectory(lib/buzzer)
+
 # IMPORTANT: Set TinyUSB compile options BEFORE adding executable
 set(PICO_TINYUSB_PATH ${PICO_SDK_PATH}/lib/tinyusb)
 
@@ -88,9 +91,11 @@ target_link_libraries(midi_synthesizer
         pico_stdlib
         hardware_uart
         hardware_i2c
+        hardware_pwm
         i2c_midi
         oled_display
-        i2c_memory)
+        i2c_memory
+        buzzer)
 
 # Link TinyUSB after stdlib so our config takes precedence
 target_link_libraries(midi_synthesizer

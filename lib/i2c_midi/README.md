@@ -36,10 +36,11 @@ The library supports three modes for handling semitone (sharp/flat) notes:
 ## Hardware Connections
 
 ### Default Configuration:
-- **I2C Port**: I2C0
-- **SDA Pin**: GPIO 4
-- **SCL Pin**: GPIO 5
+- **I2C Port**: I2C1 (shared with OLED display and EEPROM)
+- **SDA Pin**: GPIO 2
+- **SCL Pin**: GPIO 3
 - **PCF8574 Address**: 0x20 (default)
+- **PCF8575 Address**: 0x20 (default)
 - **CH423 Address**: 0x24 (default)
 
 ### PCF8574 Wiring (8-bit):
@@ -48,8 +49,8 @@ Pico              PCF8574
 ----              -------
 3.3V     ------>  VCC
 GND      ------>  GND
-GPIO 4   ------>  SDA
-GPIO 5   ------>  SCL
+GPIO 2   ------>  SDA
+GPIO 3   ------>  SCL
                   
 PCF8574 Pins:     Your Device
 P0-P7    ------>  Actuators/LEDs/etc
@@ -61,8 +62,8 @@ Pico              PCF8575
 ----              -------
 3.3V     ------>  VCC
 GND      ------>  GND
-GPIO 4   ------>  SDA
-GPIO 5   ------>  SCL
+GPIO 2   ------>  SDA
+GPIO 3   ------>  SCL
                   
 PCF8575 Pins:     Your Device
 P00-P07  ------>  Actuators/LEDs/etc (Port 0)
@@ -75,8 +76,8 @@ Pico              CH423
 ----              -----
 3.3V/5V  ------>  VCC
 GND      ------>  GND
-GPIO 4   ------>  SDA
-GPIO 5   ------>  SCL
+GPIO 2   ------>  SDA
+GPIO 3   ------>  SCL
                   
 CH423 Pins:       Your Device
 OC0-OC7  ------>  Actuators (open-collector)

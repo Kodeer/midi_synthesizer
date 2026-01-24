@@ -358,7 +358,7 @@ bool midi_handler_init(void* i2c_inst, uint8_t sda_pin, uint8_t scl_pin,
                 .note_range = settings->note_range,
                 .low_note = settings->low_note,
                 .high_note = settings->low_note + settings->note_range - 1,
-                .midi_channel = settings->midi_channel - 1,  // Convert 1-16 to 0-15
+                .midi_channel = settings->midi_channel,  // Keep as 1-16 (i2c_midi expects 1-indexed)
                 .io_address = settings->io_expander_address,
                 .i2c_port = i2c_port,
                 .io_type = (io_expander_type_t)settings->io_expander_type,

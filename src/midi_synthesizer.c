@@ -7,6 +7,7 @@
 #include "display_handler.h"
 #include "button_handler.h"
 #include "menu_handler.h"
+#include "buzzer.h"
 
 //--------------------------------------------------------------------+
 // Hardware Configuration
@@ -25,7 +26,7 @@
 #define I2C_MIDI_INSTANCE   i2c1
 #define I2C_MIDI_SDA_PIN    2
 #define I2C_MIDI_SCL_PIN    3
-#define I2C_MIDI_FREQ       100000
+#define I2C_MIDI_FREQ       400000
 
 // MIDI Semitone Handling
 #define SEMITONE_MODE       I2C_MIDI_SEMITONE_SKIP  // Options: I2C_MIDI_SEMITONE_PLAY, I2C_MIDI_SEMITONE_IGNORE, I2C_MIDI_SEMITONE_SKIP
@@ -40,12 +41,16 @@
 #define BUTTON_PIN          4
 #define BUTTON_ACTIVE_LOW   true    // Button pulls to ground when pressed
 
+// Buzzer Configuration
+#define BUZZER_PIN          15      // PWM buzzer on GPIO 15
+
 //--------------------------------------------------------------------+
 // Button Event Handler
 //--------------------------------------------------------------------+
 void handle_button_event(button_event_t event) {
     switch (event) {
         case BUTTON_EVENT_SHORT_PRESS:
+            buzzer_click();  // Click sound on button press
             if (menu_is_active()) {
                 // Cycle to next menu option
                 menu_next();
@@ -84,10 +89,18 @@ int main()
     
     debug_info("MIDI Synthesizer Starting...");
     
+    // Initialize Buzzer
+    if (!buzzer_init(BUZZER_PIN)) {
+        debug_error("Failed to initialize Buzzer");
+    } else {
+        debug_info("Buzzer initialized on GPIO %d", BUZZER_PIN);
+    }
+    
     // Initialize MIDI handler with I2C MIDI and LED feedback
     if (!midi_handler_init(I2C_MIDI_INSTANCE, I2C_MIDI_SDA_PIN, I2C_MIDI_SCL_PIN, 
                           I2C_MIDI_FREQ, LED_PIN, SEMITONE_MODE)) {
         debug_error("Failed to initialize MIDI handler");
+        buzzer_error();  // Play error sound
         // Blink LED rapidly to indicate error
         gpio_init(LED_PIN);
         gpio_set_dir(LED_PIN, GPIO_OUT);
@@ -138,6 +151,9 @@ int main()
     
     // Register MIDI handler callback with USB MIDI
     usb_midi_set_rx_callback((usb_midi_rx_callback_t)midi_handler_get_callback(), NULL);
+    
+    // Play boot-up melody to indicate successful initialization
+    buzzer_boot_melody();
     
     //debug_info("MIDI Synthesizer Ready!");
     debug_info("Waiting for USB connection...");
