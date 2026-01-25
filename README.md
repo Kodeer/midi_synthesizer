@@ -79,7 +79,6 @@ The system features real-time note display on an SSD1306 OLED screen, persistent
   - May require transistor/relay driver depending on actuator
 
 ### Common I2C Devices (on I2C1 bus)
-### Common I2C Devices (on I2C1 bus)
 - **SSD1306 OLED Display**: 128x64 pixels, Address 0x3C
   - Shares I2C1 bus (GP2/GP3)
 - **AT24C32 EEPROM**: 32K EEPROM for configuration storage, Address 0x50
