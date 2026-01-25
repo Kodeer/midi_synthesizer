@@ -1,18 +1,23 @@
 # Zoft Synthesizer V1.0
 
-A USB MIDI to I2C MIDI converter for Raspberry Pi Pico with OLED display support and System Exclusive (SysEx) configuration.
+A versatile USB MIDI controller for Raspberry Pi Pico supporting multiple output modes: I2C MIDI via GPIO expanders and direct xylophone mallet control via servo positioning.
 
 ## Overview
 
-The Zoft Synthesizer receives MIDI messages via USB and outputs them through an I2C interface to control external devices via GPIO expanders (PCF8574/PCF8575 or CH423). It features real-time note display on an SSD1306 OLED screen and comprehensive debug output via UART.
+The Zoft Synthesizer receives MIDI messages via USB and provides two output modes:
+
+1. **I2C MIDI Mode**: Controls external devices via GPIO expanders (PCF8574/PCF8575 or CH423)
+2. **Mallet MIDI Mode**: Direct servo-controlled xylophone striker for physical instrument automation
+
+The system features real-time note display on an SSD1306 OLED screen, persistent configuration storage in EEPROM, and comprehensive debug output via UART.
 
 ## Features
 
 - **USB MIDI Device**: Full USB MIDI support using TinyUSB
-- **I2C MIDI Output**: Controls GPIO expanders:
-  - PCF8574 (8-bit, address 0x20)
-  - PCF8575 (16-bit, address 0x20)
-  - CH423 (16-bit, address 0x24)
+- **Dual Output Modes**:
+  - **I2C MIDI**: Controls GPIO expanders (PCF8574, PCF8575, CH423)
+  - **Mallet MIDI**: Servo-controlled xylophone striker with configurable positioning
+- **Player Selection**: Configure via EEPROM which output mode to use
 - **OLED Display**: 128x64 SSD1306 display showing:
   - Single-pixel border around all display content
   - Centered headings with horizontal divider lines
@@ -24,14 +29,16 @@ The Zoft Synthesizer receives MIDI messages via USB and outputs them through an 
 - **Button Interface**: Single button on GPIO 4 for menu navigation:
   - Short press: Cycle through menu options
   - Hold 3 seconds: Enter menu or execute selected option
-- **Menu System**: 7 configurable options:
+- **Menu System**: 9 configurable options:
   1. Reset Defaults
   2. Save Config
-  3. MIDI Channel (1-16)
-  4. Note Range
-  5. Semitone Mode (Natural/Sharp/Flat)
-  6. All Notes Off
-  7. Exit Menu
+  3. Player Type (I2C/Mallet)
+  4. MIDI Channel (1-16)
+  5. Note Range (Use SysEx)
+  6. Semitone Mode (Play/Ignore/Skip)
+  7. View Settings
+  8. All Notes Off
+  9. Exit Menu
 - **Configuration Storage**: EEPROM persistence (AT24C32, address 0x50)
 - **Debug Output**: Comprehensive UART logging at 115200 baud
 - **LED Feedback**: Visual indication of MIDI note activity
@@ -52,17 +59,32 @@ The Zoft Synthesizer receives MIDI messages via USB and outputs them through an 
 - RP2040 microcontroller
 - USB connection for MIDI and power
 
-### I2C Devices (on I2C1 bus)
+### Output Hardware (Choose Mode)
+
+#### I2C MIDI Mode
 - **GPIO Expander** (choose one):
   - **PCF8574**: 8-bit I/O expander, Address 0x20
   - **PCF8575**: 16-bit I/O expander, Address 0x20
   - **CH423**: 16-bit I/O expander with OC/PP outputs, Address 0x24
   - SDA: GP2
   - SCL: GP3
+
+#### Mallet MIDI Mode
+- **Servo Motor**: Standard hobby servo (0-180°), powered from VSYS (5V) or external supply
+  - Signal: GP16 (3.3V PWM signal)
+  - Power: VSYS (Pin 39) or external 5-6V supply
+  - Ground: Common ground with Pico
+- **Striker Actuator**: Solenoid, relay, or motor controller
+  - Control: GP17
+  - May require transistor/relay driver depending on actuator
+
+### Common I2C Devices (on I2C1 bus)
+### Common I2C Devices (on I2C1 bus)
 - **SSD1306 OLED Display**: 128x64 pixels, Address 0x3C
-  - Shares I2C1 bus
+  - Shares I2C1 bus (GP2/GP3)
 - **AT24C32 EEPROM**: 32K EEPROM for configuration storage, Address 0x50
-  - Shares I2C1 bus
+  - Shares I2C1 bus (GP2/GP3)
+  - Stores: Player type, MIDI channel, note range, semitone mode, IO settings
 
 ### Button Interface
 - GPIO: GP4
@@ -147,6 +169,29 @@ The synthesizer supports three modes for handling semitones (black keys):
 - **IGNORE** (1): Ignore semitone notes completely
 - **SKIP** (2): Map semitones to the next full tone
 
+## Player Mode Selection
+
+The system supports two output modes, configured via EEPROM:
+
+### I2C MIDI Mode (Player Type 0)
+- Routes MIDI to I2C GPIO expanders
+- Each note maps to a GPIO pin
+- Supports up to 16 outputs (PCF8575/CH423)
+- Ideal for controlling solenoids, LEDs, or relays
+
+### Mallet MIDI Mode (Player Type 1)
+- Servo-controlled xylophone striker
+- Automatically calculates servo position for each note
+- GPIO striker activation after positioning
+- **Servo Power**: Requires 5-6V supply
+  - **VSYS (Pin 39)**: Use when USB-powered (provides 5V)
+  - **External**: Use dedicated 5-6V supply for best performance
+  - **Not 3.3V**: Servos rated 4.8-6V will be slow and unreliable at 3.3V
+- **Signal Level**: 3.3V PWM from Pico GPIO is compatible with 5V servos
+- **Timing**: Default 10ms servo settle + 50ms strike duration
+
+The player type is stored in EEPROM and loaded at boot. Both systems initialize but only the selected player processes MIDI messages.
+
 ## Button and Menu System
 
 ### Button Operation
@@ -174,41 +219,53 @@ When you hold the button for 3 seconds, the menu system activates showing:
 └──────────────────────────┘
 ```
 
-The menu provides 7 configuration options:
+The menu provides 9 configuration options:
 
 1. **Reset Defaults**: Restore factory settings
    - Channel: 1
    - Note Range: 60-84 (C4-C6)
    - Semitone Mode: SKIP
+   - Player Type: I2C MIDI
    - Requires reboot to apply
 
 2. **Save Config**: Save current settings to EEPROM
    - Persists across power cycles
    - Shows "Config Saved!" confirmation
 
-3. **MIDI Channel**: Cycle through channels 1-16
+3. **Player Type**: Toggle between I2C MIDI and Mallet MIDI
+   - I2C MIDI: GPIO expanders (PCF8574/PCF8575/CH423)
+   - Mallet MIDI: Servo-controlled xylophone striker
+   - Immediate effect after save
+
+4. **MIDI Channel**: Cycle through channels 1-16
    - Immediate effect
    - Updates display temporarily
 
-4. **Note Range**: Configure via SysEx messages
+5. **Note Range**: Configure via SysEx messages
    - Menu displays "Use SysEx" reminder
 
-5. **Semitone Mode**: Toggle between PLAY/IGNORE/SKIP
+6. **Semitone Mode**: Toggle between PLAY/IGNORE/SKIP
    - PLAY: All notes including sharps/flats
    - IGNORE: Skip semitone notes
    - SKIP: Map semitones to next natural note
 
-6. **All Notes Off**: Emergency stop
-   - Resets all I2C MIDI pins
+7. **View Settings**: Display current configuration
+   - Shows all active settings
+   - Player type, channel, note range, semitone mode
+   - Read-only display
+
+8. **All Notes Off**: Emergency stop
+   - Resets all MIDI output pins
+   - Deactivates all strikers
    - Exits menu automatically
 
-7. **Exit Menu**: Return to normal operation
+9. **Exit Menu**: Return to normal operation
    - Displays "Zoft Synthesizer V1"
 
 ### Visual Feedback
 
 - **Inverted Text**: Selected menu item shows black text on white background
-- **Numbered Items**: Each option numbered 1-7
+- **Numbered Items**: Each option numbered 1-9
 - **Padded Width**: Uniform highlighting bar across all options
 - **Centered Header**: Menu title centered with equal padding
 
@@ -361,7 +418,7 @@ midi_synthesizer/
 ├── src/
 │   ├── midi_synthesizer.c      # Main application
 │   ├── usb_midi.c/h            # USB MIDI interface
-│   ├── midi_handler.c/h        # MIDI message processing & SysEx
+│   ├── midi_handler.c/h        # MIDI message processing & SysEx & player routing
 │   ├── display_handler.c/h     # OLED display management
 │   ├── button_handler.c/h      # Button debouncing & event handling
 │   ├── menu_handler.c/h        # Menu system with OLED integration
@@ -375,6 +432,9 @@ midi_synthesizer/
 │   │   ├── drivers/
 │   │   │   ├── pcf857x_driver.c/h  # PCF8574/PCF8575 driver
 │   │   │   └── ch423_driver.c/h    # CH423 driver
+│   │   └── CMakeLists.txt
+│   ├── mallet_midi/            # Servo xylophone striker
+│   │   ├── mallet_midi.c/h
 │   │   └── CMakeLists.txt
 │   ├── i2c_memory/             # EEPROM library (AT24Cxx)
 │   │   ├── drivers/
@@ -401,10 +461,12 @@ midi_synthesizer/
 
 ### MIDI Handler (`midi_handler.c/h`)
 - Central MIDI message router
+- Player selection logic (I2C vs Mallet)
 - SysEx command processing
-- I2C MIDI integration
+- Configuration from EEPROM
 - LED feedback control
-- Configuration management
+- Initializes both I2C MIDI and Mallet MIDI
+- Routes messages to active player based on configuration
 
 ### Display Handler (`display_handler.c/h`)
 - OLED display initialization
@@ -442,6 +504,16 @@ midi_synthesizer/
 - Note-to-GPIO mapping
 - Configurable note range
 - Semitone handling logic
+
+### Mallet MIDI Library (`lib/mallet_midi/`)
+- Servo position calculation from MIDI notes
+- PWM servo control (50Hz, 0.5-2.5ms pulse width)
+- GPIO striker activation with timing
+- Configurable servo range (min/max degrees)
+- Adjustable strike duration (default 50ms)
+- Automatic striker deactivation
+- Semitone handling (Play/Ignore/Skip modes)
+- Note-to-degree linear mapping
 
 ### OLED Display Library (`lib/oled_display/`)
 - SSD1306 driver
@@ -519,6 +591,24 @@ midi_synthesizer/
 - Check 100Ω resistor is in series with buzzer
 - Ensure buzzer polarity is correct (+ to GPIO side)
 - Passive piezo buzzer required (not active buzzer with built-in oscillator)
+
+### Mallet MIDI Servo Issues
+- **Slow/Unreliable Movement**:
+  - Check servo power voltage (should be 5-6V, not 3.3V)
+  - Use VSYS (Pin 39) when USB-powered for 5V
+  - Consider external 5-6V supply for best performance
+- **Servo Doesn't Move**:
+  - Verify GPIO 16 PWM signal connection
+  - Check common ground between Pico and servo power
+  - Monitor debug output for initialization errors
+- **Wrong Notes Struck**:
+  - Verify note range configuration matches xylophone
+  - Check semitone mode setting
+  - Calibrate min/max degree settings in code
+- **Striker Doesn't Activate**:
+  - Check GPIO 17 connection to striker actuator
+  - May require transistor/relay driver for high-current actuators
+  - Verify strike duration is long enough (default 50ms)
 
 ## License
 

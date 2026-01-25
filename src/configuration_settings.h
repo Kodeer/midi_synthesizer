@@ -13,10 +13,18 @@
 #define CONFIG_VERSION 1
 
 /**
+ * MIDI player types
+ */
+typedef enum {
+    PLAYER_TYPE_I2C_MIDI = 0,    // I2C MIDI output (default)
+    PLAYER_TYPE_MALLET_MIDI = 1  // Servo-controlled xylophone striker
+} player_type_t;
+
+/**
  * Global configuration structure
  * This structure holds all persistent settings for the MIDI synthesizer
  */
-typedef struct {
+typedef struct __attribute__((packed)) {
     uint32_t magic;                      // Magic number to verify valid config
     uint8_t version;                     // Configuration version
     
@@ -25,6 +33,7 @@ typedef struct {
     uint8_t note_range;                  // Number of notes to handle
     uint8_t low_note;                    // Lowest MIDI note to respond to
     uint8_t semitone_mode;               // Semitone handling mode (0=PLAY, 1=IGNORE, 2=SKIP)
+    uint8_t player_type;                 // Player type (0=I2C_MIDI, 1=MALLET_MIDI)
     
     // I2C IO Expander settings
     uint8_t io_expander_type;            // IO expander type (0=PCF8574, 1=CH423)

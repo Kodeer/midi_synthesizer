@@ -89,6 +89,55 @@ uint8_t midi_handler_get_semitone_mode(void);
 void midi_handler_set_semitone_mode(uint8_t mode);
 
 /**
+ * @brief Get current player type
+ * 
+ * @return Player type (0=I2C_MIDI, 1=MALLET_MIDI)
+ */
+uint8_t midi_handler_get_player_type(void);
+
+/**
+ * @brief Set player type
+ * 
+ * @param type Player type (0=I2C_MIDI, 1=MALLET_MIDI)
+ */
+void midi_handler_set_player_type(uint8_t type);
+
+/**
+ * @brief Get current note range
+ * 
+ * @return Number of notes in range
+ */
+uint8_t midi_handler_get_note_range(void);
+
+/**
+ * @brief Get lowest MIDI note
+ * 
+ * @return Lowest note number (0-127)
+ */
+uint8_t midi_handler_get_low_note(void);
+
+/**
+ * @brief Get highest MIDI note
+ * 
+ * @return Highest note number (0-127)
+ */
+uint8_t midi_handler_get_high_note(void);
+
+/**
+ * @brief Get IO expander type
+ * 
+ * @return IO type (0=PCF8574, 1=CH423)
+ */
+uint8_t midi_handler_get_io_type(void);
+
+/**
+ * @brief Get IO expander I2C address
+ * 
+ * @return I2C address
+ */
+uint8_t midi_handler_get_io_address(void);
+
+/**
  * @brief Send all notes off on all channels
  */
 void midi_handler_all_notes_off(void);
@@ -118,5 +167,12 @@ uint64_t midi_handler_get_last_note_time(void);
  * @brief Initialize MIDI activity timestamp to current time
  */
 void midi_handler_init_activity_time(void);
+
+/**
+ * @brief Update MIDI handler state (call regularly from main loop)
+ * 
+ * Updates mallet MIDI striker timing and other periodic tasks
+ */
+void midi_handler_update(void);
 
 #endif // MIDI_HANDLER_H

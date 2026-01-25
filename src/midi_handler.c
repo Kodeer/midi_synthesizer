@@ -1,5 +1,6 @@
 #include "midi_handler.h"
 #include "i2c_midi.h"
+#include "../lib/mallet_midi/mallet_midi.h"
 #include "configuration_settings.h"
 #include "debug_uart.h"
 #include "display_handler.h"
@@ -17,6 +18,11 @@ static bool config_initialized = false;
 
 // I2C MIDI context
 static i2c_midi_t i2c_midi_ctx;
+
+// Mallet MIDI context
+static mallet_midi_t mallet_midi_ctx;
+static uint8_t current_player_type = 0;  // 0=I2C_MIDI, 1=MALLET_MIDI
+static bool mallet_midi_initialized = false;
 
 // LED feedback configuration
 static uint8_t led_gpio_pin = 0xFF; // 0xFF = disabled
@@ -282,9 +288,14 @@ static void internal_midi_handler(uint8_t status, uint8_t data1, uint8_t data2, 
         return;
     }
     
-    // Process MIDI message with i2c_midi library
-    // This will automatically filter by channel and note range
-    i2c_midi_process_message(&i2c_midi_ctx, status, data1, data2);
+    // Process MIDI message with selected player
+    if (current_player_type == 1 && mallet_midi_initialized) {
+        // Use mallet_midi for servo-controlled xylophone striker
+        mallet_midi_process_message(&mallet_midi_ctx, status, data1, data2);
+    } else {
+        // Use i2c_midi for I2C MIDI output (default)
+        i2c_midi_process_message(&i2c_midi_ctx, status, data1, data2);
+    }
     
     // Update display with note information
     uint8_t msg_type = status & 0xF0;
@@ -347,10 +358,37 @@ bool midi_handler_init(void* i2c_inst, uint8_t sda_pin, uint8_t scl_pin,
         // Get loaded settings
         config_settings_t *settings = config_get_settings(&config_mgr);
         if (settings) {
-            debug_info("MIDI Handler: Using stored settings - Ch:%d, Notes:%d-%d, Mode:%d",
-                      settings->midi_channel, settings->low_note,
-                      settings->low_note + settings->note_range - 1,
-                      settings->semitone_mode);
+            debug_info("MIDI Handler: Config - Ch:%d, Range:%d notes, Low:%d, Mode:%d, Player:%d",
+                      settings->midi_channel, settings->note_range, settings->low_note,
+                      settings->semitone_mode, settings->player_type);
+            
+            // Load player type from configuration
+            current_player_type = settings->player_type;
+            
+            // Initialize mallet MIDI if player type is set to mallet
+            if (current_player_type == 1) {
+                // Create mallet MIDI configuration from settings
+                mallet_midi_config_t mallet_config = {
+                    .note_range = settings->note_range,
+                    .low_note = settings->low_note,
+                    .high_note = settings->low_note + settings->note_range - 1,
+                    .midi_channel = settings->midi_channel - 1,  // Convert 1-indexed to 0-indexed
+                    .min_degree = 0,
+                    .max_degree = 180,
+                    .strike_duration_ms = 50,
+                    .semitone_mode = (mallet_midi_semitone_mode_t)settings->semitone_mode,
+                    .servo_gpio_pin = 16,
+                    .striker_gpio_pin = 17
+                };
+                
+                if (mallet_midi_init_with_config(&mallet_midi_ctx, &mallet_config)) {
+                    mallet_midi_initialized = true;
+                    debug_info("MIDI Handler: Mallet MIDI initialized from config (Servo: GPIO 16, Striker: GPIO 17)");
+                } else {
+                    debug_error("MIDI Handler: Failed to initialize Mallet MIDI from config, falling back to I2C MIDI");
+                    current_player_type = 0; // Fall back to I2C MIDI
+                }
+            }
             
             // Initialize I2C MIDI with configuration from EEPROM
             // Note: I2C bus is already initialized above
@@ -475,8 +513,8 @@ void midi_handler_process_message(uint8_t status, uint8_t data1, uint8_t data2)
 
 uint8_t midi_handler_get_channel(void)
 {
-    // Return 1-16 (not 0-15)
-    return i2c_midi_ctx.config.midi_channel + 1;
+    // Channel is already stored as 1-16 internally
+    return i2c_midi_ctx.config.midi_channel;
 }
 
 uint8_t midi_handler_get_semitone_mode(void)
@@ -514,12 +552,19 @@ bool midi_handler_save_config(void)
     // Update configuration with current settings
     config_settings_t *settings = config_get_settings(&config_mgr);
     if (settings) {
-        settings->midi_channel = i2c_midi_ctx.config.midi_channel + 1;  // Convert 0-15 to 1-16
+        debug_info("MIDI Handler: Current i2c_midi channel: %d", i2c_midi_ctx.config.midi_channel);
+        
+        settings->midi_channel = i2c_midi_ctx.config.midi_channel;  // Already stored as 1-16
         settings->low_note = i2c_midi_ctx.config.low_note;
         settings->note_range = i2c_midi_ctx.config.note_range;
         settings->semitone_mode = (uint8_t)i2c_midi_ctx.config.semitone_mode;
+        settings->player_type = current_player_type;
         settings->io_expander_address = i2c_midi_ctx.config.io_address;
         settings->io_expander_type = (uint8_t)i2c_midi_ctx.config.io_type;
+        
+        debug_info("MIDI Handler: Saving - Ch:%d, Notes:%d-%d, Mode:%d, Player:%d",
+                   settings->midi_channel, settings->low_note, settings->low_note + settings->note_range - 1,
+                   settings->semitone_mode, settings->player_type);
         
         if (config_save(&config_mgr)) {
             debug_info("MIDI Handler: Configuration saved to EEPROM");
@@ -550,4 +595,67 @@ bool midi_handler_reset_to_defaults(void)
         debug_error("MIDI Handler: Failed to save default configuration");
         return false;
     }
+}
+uint8_t midi_handler_get_player_type(void)
+{
+    return current_player_type;
+}
+
+void midi_handler_set_player_type(uint8_t type)
+{
+    if (type > 1) {
+        debug_error("MIDI Handler: Invalid player type %d", type);
+        return;
+    }
+    
+    current_player_type = type;
+    
+    const char* player_names[] = {"I2C MIDI", "Mallet MIDI"};
+    debug_info("MIDI Handler: Player type set to %s", player_names[type]);
+    
+    // Initialize mallet_midi if switching to it for the first time
+    if (type == 1 && !mallet_midi_initialized) {
+        // GPIO pins defined in midi_synthesizer.c
+        // MALLET_SERVO_PIN = 16, MALLET_STRIKER_PIN = 17
+        if (mallet_midi_init(&mallet_midi_ctx, 16, 17)) {
+            mallet_midi_initialized = true;
+            debug_info("MIDI Handler: Mallet MIDI initialized (Servo: GPIO 16, Striker: GPIO 17)");
+        } else {
+            debug_error("MIDI Handler: Failed to initialize Mallet MIDI");
+            current_player_type = 0; // Fall back to I2C MIDI
+        }
+    }
+}
+
+void midi_handler_update(void)
+{
+    // Update mallet MIDI if active
+    if (current_player_type == 1 && mallet_midi_initialized) {
+        mallet_midi_update(&mallet_midi_ctx);
+    }
+}
+
+uint8_t midi_handler_get_note_range(void)
+{
+    return i2c_midi_ctx.config.note_range;
+}
+
+uint8_t midi_handler_get_low_note(void)
+{
+    return i2c_midi_ctx.config.low_note;
+}
+
+uint8_t midi_handler_get_high_note(void)
+{
+    return i2c_midi_ctx.config.high_note;
+}
+
+uint8_t midi_handler_get_io_type(void)
+{
+    return (uint8_t)i2c_midi_ctx.config.io_type;
+}
+
+uint8_t midi_handler_get_io_address(void)
+{
+    return i2c_midi_ctx.config.io_address;
 }

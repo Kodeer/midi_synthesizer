@@ -7,6 +7,7 @@
 #define DEFAULT_NOTE_RANGE          8       // 8 notes
 #define DEFAULT_LOW_NOTE            60      // Middle C
 #define DEFAULT_SEMITONE_MODE       0       // PLAY mode
+#define DEFAULT_PLAYER_TYPE         0       // I2C_MIDI
 #define DEFAULT_IO_EXPANDER_TYPE    0       // PCF8574
 #define DEFAULT_IO_EXPANDER_ADDRESS 0x20    // PCF8574 default
 #define DEFAULT_DISPLAY_ENABLED     1       // Enabled
@@ -89,6 +90,7 @@ void config_load_defaults(config_manager_t *ctx) {
     s->note_range = DEFAULT_NOTE_RANGE;
     s->low_note = DEFAULT_LOW_NOTE;
     s->semitone_mode = DEFAULT_SEMITONE_MODE;
+    s->player_type = DEFAULT_PLAYER_TYPE;
     
     // I2C IO Expander settings
     s->io_expander_type = DEFAULT_IO_EXPANDER_TYPE;
@@ -192,10 +194,10 @@ bool config_load(config_manager_t *ctx) {
     // Copy valid configuration
     memcpy(&ctx->settings, &temp_settings, sizeof(config_settings_t));
     debug_info("CONFIG: Configuration loaded successfully");
-    debug_info("CONFIG: Ch:%d, Notes:%d-%d, Mode:%d, IO:0x%02X",
-               ctx->settings.midi_channel, ctx->settings.low_note,
-               ctx->settings.low_note + ctx->settings.note_range - 1,
-               ctx->settings.semitone_mode, ctx->settings.io_expander_address);
+    debug_info("CONFIG: Ch:%d, Range:%d notes, Low:%d, Mode:%d, IO:0x%02X",
+               ctx->settings.midi_channel, ctx->settings.note_range,
+               ctx->settings.low_note, ctx->settings.semitone_mode, 
+               ctx->settings.io_expander_address);
     return true;
 
 load_defaults:

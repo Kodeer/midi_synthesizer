@@ -16,17 +16,87 @@ static bool menu_active = false;
 static menu_option_t current_option = MENU_OPTION_RESET_DEFAULTS;
 static bool channel_selection_active = false;
 static uint8_t selected_channel = 1;
+static bool settings_view_active = false;
+static uint8_t settings_view_offset = 0;
 
 // Menu option names
 static const char* menu_names[MENU_OPTION_COUNT] = {
     "Reset Defaults",
     "Save Config",
+    "Player Type",
     "MIDI Channel",
     "Note Range",
     "Semitone Mode",
+    "View Settings",
     "All Notes Off",
     "Exit Menu"
 };
+
+//--------------------------------------------------------------------+
+// Settings View Functions
+//--------------------------------------------------------------------+
+
+static void display_settings_view(void) {
+    const uint8_t max_lines = 6;  // Maximum lines that fit on display
+    const uint8_t line_height = 10;
+    const uint8_t start_y = 2;
+    
+    // Get current settings
+    uint8_t channel = midi_handler_get_channel();
+    uint8_t semitone = midi_handler_get_semitone_mode();
+    uint8_t player_type = midi_handler_get_player_type();
+    uint8_t note_range = midi_handler_get_note_range();
+    uint8_t low_note = midi_handler_get_low_note();
+    uint8_t high_note = midi_handler_get_high_note();
+    uint8_t io_type = midi_handler_get_io_type();
+    uint8_t io_addr = midi_handler_get_io_address();
+    
+    const char* semitone_names[] = {"PLAY", "IGNORE", "SKIP"};
+    const char* player_names[] = {"I2C MIDI", "Mallet MIDI"};
+    const char* io_type_names[] = {"PCF8574", "CH423"};
+    
+    // Build settings array - increased to accommodate more settings
+    char settings[10][22];  // 10 settings, 21 chars + null terminator
+    uint8_t total_settings = 0;
+    
+    snprintf(settings[total_settings++], 22, "Channel: %d", channel);
+    snprintf(settings[total_settings++], 22, "Player: %s", player_names[player_type]);
+    snprintf(settings[total_settings++], 22, "Semitone: %s", semitone_names[semitone]);
+    snprintf(settings[total_settings++], 22, "Note Range: %d", note_range);
+    snprintf(settings[total_settings++], 22, "Low Note: %d", low_note);
+    snprintf(settings[total_settings++], 22, "High Note: %d", high_note);
+    snprintf(settings[total_settings++], 22, "I2C Freq: 400kHz");
+    snprintf(settings[total_settings++], 22, "IO Type: %s", io_type_names[io_type]);
+    snprintf(settings[total_settings++], 22, "IO Addr: 0x%02X", io_addr);
+    
+    // Clear display
+    display_handler_clear();
+    
+    // Display title
+    display_handler_writeline(30, start_y, "SETTINGS");
+    
+    // Draw horizontal line
+    for (uint8_t x = 1; x < 127; x++) {
+        oled_set_pixel(x, start_y + 9, 1);
+    }
+    
+    // Display settings starting from offset
+    uint8_t y_pos = start_y + 13;
+    for (uint8_t i = 0; i < max_lines && (settings_view_offset + i) < total_settings; i++) {
+        display_handler_writeline(2, y_pos, settings[settings_view_offset + i]);
+        y_pos += line_height;
+    }
+    
+    // Show scroll indicator if more settings available
+    if (settings_view_offset + max_lines < total_settings) {
+        display_handler_writeline(110, 56, "v");
+    }
+    if (settings_view_offset > 0) {
+        display_handler_writeline(110, 1, "^");
+    }
+    
+    oled_display();
+}
 
 //--------------------------------------------------------------------+
 // Menu Handler Implementation
@@ -80,6 +150,19 @@ void menu_next(void) {
         return;
     }
     
+    // If in settings view mode, scroll through settings
+    if (settings_view_active) {
+        const uint8_t total_settings = 9;  // Total number of settings
+        const uint8_t max_lines = 6;        // Max lines visible
+        
+        if (settings_view_offset + max_lines < total_settings) {
+            settings_view_offset++;
+            display_settings_view();
+            debug_info("MENU: Settings view scroll: offset=%d", settings_view_offset);
+        }
+        return;
+    }
+    
     // If in channel selection mode, increment channel number
     if (channel_selection_active) {
         selected_channel++;
@@ -109,6 +192,15 @@ void menu_next(void) {
 
 void menu_execute(void) {
     if (!menu_active) {
+        return;
+    }
+    
+    // If in settings view mode, long press exits back to menu
+    if (settings_view_active) {
+        settings_view_active = false;
+        settings_view_offset = 0;
+        debug_info("MENU: Exited settings view");
+        menu_update_display();
         return;
     }
     
@@ -194,6 +286,24 @@ void menu_execute(void) {
             menu_update_display();
             break;
             
+        case MENU_OPTION_PLAYER_TYPE:
+            // Cycle player types
+            {
+                uint8_t player_type = midi_handler_get_player_type();
+                player_type = (player_type + 1) % 2;  // 0=I2C_MIDI, 1=MALLET_MIDI
+                midi_handler_set_player_type(player_type);
+                
+                const char* player_names[] = {"I2C MIDI", "Mallet MIDI"};
+                snprintf(msg, sizeof(msg), "Type: %s", player_names[player_type]);
+                display_handler_clear();
+                display_handler_writeline(5, 20, "Player Type");
+                display_handler_writeline(5, 35, msg);
+                debug_info("MENU: Player type set to %s", player_names[player_type]);
+            }
+            sleep_ms(1500);
+            menu_update_display();
+            break;
+            
         case MENU_OPTION_SEMITONE_MODE:
             // Cycle semitone modes
             {
@@ -210,6 +320,14 @@ void menu_execute(void) {
             }
             sleep_ms(1500);
             menu_update_display();
+            break;
+            
+        case MENU_OPTION_VIEW_SETTINGS:
+            // Enter settings view mode
+            settings_view_active = true;
+            settings_view_offset = 0;
+            display_settings_view();
+            debug_info("MENU: Entered settings view mode");
             break;
             
         case MENU_OPTION_ALL_NOTES_OFF:

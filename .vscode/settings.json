@@ -53,6 +53,8 @@
         "ForEach-Object": true,
         "mv": true,
         "&": true,
-        "arm-none-eabi-size": true
+        "arm-none-eabi-size": true,
+        "type": true,
+        "cmake": true
     }
 }

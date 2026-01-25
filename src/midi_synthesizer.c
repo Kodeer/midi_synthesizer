@@ -44,6 +44,10 @@
 // Buzzer Configuration
 #define BUZZER_PIN          15      // PWM buzzer on GPIO 15
 
+// Mallet MIDI Configuration (Servo-controlled xylophone striker)
+#define MALLET_SERVO_PIN    16      // Servo PWM on GPIO 16
+#define MALLET_STRIKER_PIN  17      // Striker GPIO on GPIO 17
+
 //--------------------------------------------------------------------+
 // Button Event Handler
 //--------------------------------------------------------------------+
@@ -165,6 +169,9 @@ int main()
         
         // Process USB and MIDI tasks
         usb_midi_task();
+        
+        // Update MIDI handler (for mallet striker timing)
+        midi_handler_update();
         
         // Check if timer has triggered screensaver timeout
         display_handler_check_timeout();
