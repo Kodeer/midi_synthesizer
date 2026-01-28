@@ -62,6 +62,9 @@ add_subdirectory(lib/buzzer)
 # Add mallet_midi library subdirectory
 add_subdirectory(lib/mallet_midi)
 
+# Add i2c_pca9685_midi library subdirectory
+add_subdirectory(lib/i2c_pca9685_midi)
+
 # IMPORTANT: Set TinyUSB compile options BEFORE adding executable
 set(PICO_TINYUSB_PATH ${PICO_SDK_PATH}/lib/tinyusb)
 
@@ -99,7 +102,8 @@ target_link_libraries(midi_synthesizer
         oled_display
         i2c_memory
         buzzer
-        mallet_midi)
+        mallet_midi
+        i2c_pca9685_midi)
 
 # Link TinyUSB after stdlib so our config takes precedence
 target_link_libraries(midi_synthesizer
