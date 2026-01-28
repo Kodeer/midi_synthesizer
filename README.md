@@ -4,19 +4,21 @@ A versatile USB MIDI controller for Raspberry Pi Pico supporting multiple output
 
 ## Overview
 
-The Zoft Synthesizer receives MIDI messages via USB and provides two output modes:
+The Zoft Synthesizer receives MIDI messages via USB and provides multiple output modes:
 
 1. **I2C MIDI Mode**: Controls external devices via GPIO expanders (PCF8574/PCF8575 or CH423)
-2. **Mallet MIDI Mode**: Direct servo-controlled xylophone striker for physical instrument automation
+2. **Mallet MIDI Mode**: Single servo-controlled xylophone striker for physical instrument automation
+3. **PCA9685 MIDI Mode**: 16-channel servo control via PCA9685 PWM driver for multi-note percussion
 
 The system features real-time note display on an SSD1306 OLED screen, persistent configuration storage in EEPROM, and comprehensive debug output via UART.
 
 ## Features
 
 - **USB MIDI Device**: Full USB MIDI support using TinyUSB
-- **Dual Output Modes**:
+- **Multiple Output Modes**:
   - **I2C MIDI**: Controls GPIO expanders (PCF8574, PCF8575, CH423)
-  - **Mallet MIDI**: Servo-controlled xylophone striker with configurable positioning
+  - **Mallet MIDI**: Single servo-controlled xylophone striker with configurable positioning
+  - **PCA9685 MIDI**: 16-channel PWM servo driver for multi-note simultaneous control
 - **Player Selection**: Configure via EEPROM which output mode to use
 - **OLED Display**: 128x64 SSD1306 display showing:
   - Single-pixel border around all display content
@@ -435,6 +437,11 @@ midi_synthesizer/
 │   ├── mallet_midi/            # Servo xylophone striker
 │   │   ├── mallet_midi.c/h
 │   │   └── CMakeLists.txt
+│   ├── i2c_pca9685_midi/       # PCA9685 16-channel servo driver
+│   │   ├── i2c_pca9685_midi.c/h
+│   │   ├── drivers/
+│   │   │   └── pca9685_driver.c/h  # PCA9685 PWM driver
+│   │   └── CMakeLists.txt
 │   ├── i2c_memory/             # EEPROM library (AT24Cxx)
 │   │   ├── drivers/
 │   │   │   └── at24cxx_driver.c/h  # AT24C32 EEPROM driver
@@ -513,6 +520,17 @@ midi_synthesizer/
 - Automatic striker deactivation
 - Semitone handling (Play/Ignore/Skip modes)
 - Note-to-degree linear mapping
+
+### PCA9685 MIDI Library (`lib/i2c_pca9685_midi/`)
+- Controls up to 16 servos via I2C PCA9685 PWM driver
+- Two strike modes: Simple (rest/strike positions) and Position (unique angle per note)
+- 12-bit PWM resolution (4096 steps)
+- Configurable strike parameters (rest angle, strike angle, duration)
+- Automatic return to rest position after strike
+- Semitone handling (Play/Ignore/Skip modes)
+- Multiple PCA9685 modules support (up to 62 on one I2C bus)
+- Simultaneous multi-note striking (polyphonic)
+- Low-level PCA9685 driver with full register control
 
 ### OLED Display Library (`lib/oled_display/`)
 - SSD1306 driver
